@@ -1,0 +1,17 @@
+[package]
+name = "block_breaker"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = "0.7.0"
+bevy_asset_loader = { version = "0.10.0", features = ["2d"] }
+bevy_prototype_lyon = "0.5.0"
+heron = { version = "3.0.0", features = ["2d", "debug-2d"] }
+iyes_loopless = "0.5.1"
+rand = "0.8.5"
+kayak_ui = { git = "https://github.com/StarArawn/kayak_ui", rev = "6ff0d1dcadd4d826d13cea008d57e9f735841f2e", features = [
+    "bevy_renderer",
+] }
