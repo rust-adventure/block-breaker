@@ -22,20 +22,22 @@ pub struct ImageAssets {
     pub button: Handle<Image>,
     #[asset(path = "blue_button12.png")]
     pub button_pressed: Handle<Image>,
-    #[asset(path = "grey_box.png")]
-    pub box_unchecked: Handle<Image>,
-    #[asset(path = "green_boxCheckmark.png")]
-    pub box_checked: Handle<Image>,
-    #[asset(texture_atlas(
-        tile_size_x = 16.,
-        tile_size_y = 16.,
-        columns = 3,
-        rows = 1,
-        padding_x = 0.,
-        padding_y = 0.
-    ))]
-    #[asset(path = "grass.png")]
-    pub grass: Handle<TextureAtlas>,
+    #[asset(path = "particles/circle_01.png")]
+    pub ball_hit: Handle<Image>,
+    // #[asset(path = "grey_box.png")]
+    // pub box_unchecked: Handle<Image>,
+    // #[asset(path = "green_boxCheckmark.png")]
+    // pub box_checked: Handle<Image>,
+    // #[asset(texture_atlas(
+    //     tile_size_x = 16.,
+    //     tile_size_y = 16.,
+    //     columns = 3,
+    //     rows = 1,
+    //     padding_x = 0.,
+    //     padding_y = 0.
+    // ))]
+    // #[asset(path = "grass.png")]
+    // pub grass: Handle<TextureAtlas>,
 }
 
 // #[derive(AssetCollection)]

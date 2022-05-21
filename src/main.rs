@@ -10,8 +10,13 @@ use block_breaker::{
 
 use bevy::{
     prelude::*,
+    render::{
+        render_resource::WgpuFeatures,
+        settings::WgpuSettings,
+    },
     sprite::{Anchor, MaterialMesh2dBundle},
 };
+use bevy_hanabi::*;
 use bevy_prototype_lyon::prelude::*;
 use heron::{
     prelude::*,
@@ -22,19 +27,29 @@ use heron::{
     CustomCollisionShape,
 };
 use iyes_loopless::prelude::*;
-use rand::Rng;
 
 fn main() {
+    let mut options = WgpuSettings::default();
+    options.features.set(
+        WgpuFeatures::VERTEX_WRITABLE_STORAGE,
+        true,
+    );
     App::new()
+        .insert_resource(options)
         .insert_resource(Msaa { samples: 4 })
         .insert_resource(Board::new(11, 28))
+        .insert_resource(bevy::log::LogSettings {
+            level: bevy::log::Level::WARN,
+            filter: "bevy_hanabi=error,spawn=trace"
+                .to_string(),
+        })
         .add_plugins(DefaultPlugins)
-        // .add_plugin(ShapePlugin)
+        .add_plugin(HanabiPlugin)
         .add_plugin(PhysicsPlugin::default())
         .add_plugin(UiPlugin)
         .add_plugin(AssetsPlugin)
         .insert_resource(ClearColor(Color::rgb(
-            1.0, 1.0, 1.0,
+            0.5, 0.5, 0.5,
         )))
         .insert_resource(Gravity::from(Vec3::new(
             0.0, 0.0, 0.0,
@@ -43,34 +58,19 @@ fn main() {
         .add_plugin(ScorePlugin)
         .add_event::<SpawnThreeBallsEvent>()
         .add_startup_system(setup)
-        .add_system(
-            paddle_collisions
-                .run_in_state(GameState::Playing),
-        )
-        .add_system(
-            despawn_area_collisions
-                .run_in_state(GameState::Playing),
-        )
-        .add_system(
-            movement.run_in_state(GameState::Playing),
-        )
-        .add_system(
-            track_damage.run_in_state(GameState::Playing),
-        )
-        .add_system(
-            block_removal.run_in_state(GameState::Playing),
-        )
-        .add_system(
-            powerup_gravity
-                .run_in_state(GameState::Playing),
-        )
-        .add_system(
-            powerup_collisions
-                .run_in_state(GameState::Playing),
-        )
-        .add_system(
-            three_balls_events
-                .run_in_state(GameState::Playing),
+        .add_system_set(
+            ConditionSet::new()
+                .run_in_state(GameState::Playing)
+                .with_system(paddle_collisions)
+                .with_system(despawn_area_collisions)
+                .with_system(ball_collisions)
+                .with_system(movement)
+                .with_system(track_damage)
+                .with_system(block_removal)
+                .with_system(powerup_gravity)
+                .with_system(powerup_collisions)
+                .with_system(three_balls_events)
+                .into(),
         )
         .add_enter_system(
             GameState::Playing,
@@ -83,6 +83,9 @@ fn setup(
     mut commands: Commands,
     images: Res<ImageAssets>,
     board: Res<Board>,
+    mut effects: ResMut<Assets<EffectAsset>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     let mut camera = OrthographicCameraBundle::new_2d();
     camera.transform = Transform::from_xyz(
@@ -111,6 +114,47 @@ fn setup(
         texture: images.background.clone(),
         ..Default::default()
     });
+    // setup effects
+    let mut gradient = Gradient::new();
+    gradient.add_key(0.0, Vec4::new(1.0, 1.0, 1.0, 1.0));
+    gradient.add_key(0.05, Vec4::new(1.0, 1.0, 1.0, 0.0));
+
+    let mut size_gradient = Gradient::new();
+    size_gradient.add_key(0.0, Vec2::new(10.0, 10.0));
+    size_gradient.add_key(0.05, Vec2::new(100.0, 100.0));
+
+    let spawner = Spawner::once(1.0.into(), false);
+    let effect = effects.add(
+        EffectAsset {
+            name: "Impact".into(),
+            capacity: 32768,
+            spawner,
+            ..Default::default()
+        }
+        // .init(PositionCircleModifier {
+        //     radius: 10.05,
+        //     speed: 1.2.into(),
+        //     dimension: ShapeDimension::Surface,
+        //     ..Default::default()
+        // })
+        .render(ParticleTextureModifier {
+            texture: images.ball_hit.clone(),
+        })
+        .render(SizeOverLifetimeModifier {
+            gradient:size_gradient
+            //  Gradient::constant(Vec2::splat(
+            //     100.05,
+            // )),
+        })
+        .render(ColorOverLifetimeModifier { gradient }),
+    );
+    commands
+        .spawn_bundle(
+            ParticleEffectBundle::new(effect)
+                .with_spawner(spawner),
+        )
+        .insert(Name::new("effect"))
+        .insert(BallContactEffect);
 }
 
 fn spawn_new_game(
@@ -414,6 +458,83 @@ fn despawn_area_collisions(
             CollisionEvent::Stopped(_, _) => {
                 // dbg!("stopped");
             }
+        }
+    }
+}
+fn ball_collisions(
+    mut events: EventReader<CollisionEvent>,
+    mut effect: Query<
+        (&mut ParticleEffect, &mut Transform),
+        (With<BallContactEffect>, Without<Ball>),
+    >,
+
+    ball: Query<(&Velocity, &Transform), With<Ball>>,
+    board: Res<Board>,
+) {
+    let (mut effect, mut effect_transform) =
+        effect.single_mut();
+
+    for event in events.iter() {
+        match event {
+            CollisionEvent::Started(a, b) => {
+                let collider = if let Ok(a) =
+                    ball.get(a.rigid_body_entity())
+                {
+                    Some(a)
+                } else if let Ok(b) =
+                    ball.get(b.rigid_body_entity())
+                {
+                    Some(b)
+                } else {
+                    None
+                };
+
+                if let Some((velocity, ball_transform)) =
+                    collider
+                {
+                    dbg!("ball hit");
+                    // This isn't the most accurate place to spawn the particle effect,
+                    // but this is just for demonstration, so whatever.
+                    effect_transform.translation =
+                        ball_transform.translation.clone();
+                    // *effect_transform = Transform::from_xyz(
+                    //     board.physical.x / 2.0,
+                    //     board.physical.y / 2.0,
+                    //     5.0,
+                    // );
+                    // Spawn the particles
+                    effect.maybe_spawner().unwrap().reset();
+                    // let x_diff = ball_transform
+                    //     .translation
+                    //     .x
+                    //     - paddle_transform.translation.x;
+
+                    // // a^2 + b^2 = c^2
+                    // let optimal_velocity: f32 =
+                    //     100.0 * 100.0 + 400.0 * 400.0;
+                    // let c = optimal_velocity.sqrt();
+
+                    // // TODO: Jacob says this `10` might need
+                    // // to be a function of the paddle width
+                    // let normalized = Vec2::new(
+                    //     x_diff * 7.5,
+                    //     velocity.linear.y,
+                    // )
+                    // .normalize();
+
+                    // // expand normalized parts back out into
+                    // // full magnitude
+                    // let new_velocity = normalized * c;
+
+                    // *velocity =
+                    //     Velocity::from_linear(Vec3::new(
+                    //         new_velocity.x,
+                    //         new_velocity.y,
+                    //         0.0,
+                    //     ))
+                }
+            }
+            CollisionEvent::Stopped(_, _) => {}
         }
     }
 }

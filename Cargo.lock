@@ -438,6 +438,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_hanabi"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98dff35996adf6990e1abf884e951ea5c2c86d2525be7124578e89350e2ae97e"
+dependencies = [
+ "anyhow",
+ "bevy",
+ "bitflags",
+ "bytemuck",
+ "rand",
+ "rand_pcg",
+ "ron",
+ "serde",
+]
+
+[[package]]
 name = "bevy_hierarchy"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -885,6 +901,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_asset_loader",
+ "bevy_hanabi",
  "bevy_prototype_lyon",
  "heron",
  "iyes_loopless",
@@ -2955,6 +2972,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d34f1408f55294453790c48b2f1ebbb1c5b4b7563eb1f418bcfcfdbb06ebb4e7"
 dependencies = [
  "getrandom",
+]
+
+[[package]]
+name = "rand_pcg"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59cad018caf63deb318e5a4586d99a24424a364f40f1e5778c29aca23f4fc73e"
+dependencies = [
+ "rand_core",
 ]
 
 [[package]]

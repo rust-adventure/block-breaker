@@ -47,3 +47,6 @@ pub enum Powerup {
 }
 
 pub struct SpawnThreeBallsEvent;
+
+#[derive(Component)]
+pub struct BallContactEffect;
