@@ -16,7 +16,6 @@ use bevy::{
     },
     sprite::{Anchor, MaterialMesh2dBundle},
 };
-use bevy_hanabi::*;
 use bevy_prototype_lyon::prelude::*;
 use heron::{
     prelude::*,
@@ -29,22 +28,10 @@ use heron::{
 use iyes_loopless::prelude::*;
 
 fn main() {
-    let mut options = WgpuSettings::default();
-    options.features.set(
-        WgpuFeatures::VERTEX_WRITABLE_STORAGE,
-        true,
-    );
     App::new()
-        .insert_resource(options)
         .insert_resource(Msaa { samples: 4 })
         .insert_resource(Board::new(11, 28))
-        .insert_resource(bevy::log::LogSettings {
-            level: bevy::log::Level::WARN,
-            filter: "bevy_hanabi=error,spawn=trace"
-                .to_string(),
-        })
         .add_plugins(DefaultPlugins)
-        .add_plugin(HanabiPlugin)
         .add_plugin(PhysicsPlugin::default())
         .add_plugin(UiPlugin)
         .add_plugin(AssetsPlugin)
@@ -70,6 +57,7 @@ fn main() {
                 .with_system(powerup_gravity)
                 .with_system(powerup_collisions)
                 .with_system(three_balls_events)
+                .with_system(particles::ball_hit_particles)
                 .into(),
         )
         .add_enter_system(
@@ -83,9 +71,6 @@ fn setup(
     mut commands: Commands,
     images: Res<ImageAssets>,
     board: Res<Board>,
-    mut effects: ResMut<Assets<EffectAsset>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     let mut camera = OrthographicCameraBundle::new_2d();
     camera.transform = Transform::from_xyz(
@@ -114,47 +99,6 @@ fn setup(
         texture: images.background.clone(),
         ..Default::default()
     });
-    // setup effects
-    let mut gradient = Gradient::new();
-    gradient.add_key(0.0, Vec4::new(1.0, 1.0, 1.0, 1.0));
-    gradient.add_key(0.05, Vec4::new(1.0, 1.0, 1.0, 0.0));
-
-    let mut size_gradient = Gradient::new();
-    size_gradient.add_key(0.0, Vec2::new(10.0, 10.0));
-    size_gradient.add_key(0.05, Vec2::new(100.0, 100.0));
-
-    let spawner = Spawner::once(1.0.into(), false);
-    let effect = effects.add(
-        EffectAsset {
-            name: "Impact".into(),
-            capacity: 32768,
-            spawner,
-            ..Default::default()
-        }
-        // .init(PositionCircleModifier {
-        //     radius: 10.05,
-        //     speed: 1.2.into(),
-        //     dimension: ShapeDimension::Surface,
-        //     ..Default::default()
-        // })
-        .render(ParticleTextureModifier {
-            texture: images.ball_hit.clone(),
-        })
-        .render(SizeOverLifetimeModifier {
-            gradient:size_gradient
-            //  Gradient::constant(Vec2::splat(
-            //     100.05,
-            // )),
-        })
-        .render(ColorOverLifetimeModifier { gradient }),
-    );
-    commands
-        .spawn_bundle(
-            ParticleEffectBundle::new(effect)
-                .with_spawner(spawner),
-        )
-        .insert(Name::new("effect"))
-        .insert(BallContactEffect);
 }
 
 fn spawn_new_game(
@@ -462,18 +406,12 @@ fn despawn_area_collisions(
     }
 }
 fn ball_collisions(
+    mut commands: Commands,
     mut events: EventReader<CollisionEvent>,
-    mut effect: Query<
-        (&mut ParticleEffect, &mut Transform),
-        (With<BallContactEffect>, Without<Ball>),
-    >,
-
     ball: Query<(&Velocity, &Transform), With<Ball>>,
     board: Res<Board>,
+    images: Res<ImageAssets>,
 ) {
-    let (mut effect, mut effect_transform) =
-        effect.single_mut();
-
     for event in events.iter() {
         match event {
             CollisionEvent::Started(a, b) => {
@@ -493,17 +431,23 @@ fn ball_collisions(
                     collider
                 {
                     dbg!("ball hit");
-                    // This isn't the most accurate place to spawn the particle effect,
-                    // but this is just for demonstration, so whatever.
-                    effect_transform.translation =
-                        ball_transform.translation.clone();
-                    // *effect_transform = Transform::from_xyz(
-                    //     board.physical.x / 2.0,
-                    //     board.physical.y / 2.0,
-                    //     5.0,
-                    // );
-                    // Spawn the particles
-                    effect.maybe_spawner().unwrap().reset();
+
+                    commands
+                        .spawn_bundle(SpriteBundle {
+                            sprite: Sprite {
+                                custom_size: Some(
+                                    Vec2::new(10.0, 10.0),
+                                ),
+                                ..Default::default()
+                            },
+                            texture: images
+                                .ball_hit
+                                .clone(),
+                            transform: ball_transform
+                                .clone(),
+                            ..Default::default()
+                        })
+                        .insert(BallHit);
                     // let x_diff = ball_transform
                     //     .translation
                     //     .x

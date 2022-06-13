@@ -5,6 +5,7 @@ use custom_commands::*;
 pub mod assets;
 pub mod blocks;
 pub mod levels;
+pub mod particles;
 pub mod scoring;
 pub mod ui;
 
@@ -50,3 +51,6 @@ pub struct SpawnThreeBallsEvent;
 
 #[derive(Component)]
 pub struct BallContactEffect;
+
+#[derive(Component)]
+pub struct BallHit;

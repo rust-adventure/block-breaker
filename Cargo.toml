@@ -15,4 +15,3 @@ rand = "0.8.5"
 kayak_ui = { git = "https://github.com/StarArawn/kayak_ui", rev = "6ff0d1dcadd4d826d13cea008d57e9f735841f2e", features = [
     "bevy_renderer",
 ] }
-bevy_hanabi = { version = "0.2.0", default-features = false, features = ["2d"] }
