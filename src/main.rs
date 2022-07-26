@@ -8,14 +8,7 @@ use block_breaker::{
     SpawnThreeBallsEvent, *,
 };
 
-use bevy::{
-    prelude::*,
-    render::{
-        render_resource::WgpuFeatures,
-        settings::WgpuSettings,
-    },
-    sprite::{Anchor, MaterialMesh2dBundle},
-};
+use bevy::{prelude::*, sprite::Anchor};
 use bevy_prototype_lyon::prelude::*;
 use heron::{
     prelude::*,
@@ -103,7 +96,7 @@ fn setup(
 
 fn spawn_new_game(
     mut commands: Commands,
-    images: Res<ImageAssets>,
+    _images: Res<ImageAssets>,
     board: Res<Board>,
 ) {
     let shape = shapes::Circle {
@@ -194,6 +187,7 @@ fn spawn_new_game(
         .insert(Velocity::from_linear(Vec3::new(
             0.0, 0.0, 0.0,
         )))
+        .insert(Collisions::default())
         .insert(Paddle);
 
     // Playing Area Exterior
@@ -383,14 +377,14 @@ fn despawn_area_collisions(
     for event in events.iter() {
         match event {
             CollisionEvent::Started(a, b) => {
-                if let (Ok(entity), Ok(wall)) = (
+                if let (Ok(entity), Ok(_wall)) = (
                     ball.get_mut(a.rigid_body_entity()),
                     despawn_area.get(b.rigid_body_entity()),
                 ) {
                     commands
                         .entity(entity)
                         .despawn_recursive();
-                } else if let (Ok(entity), Ok(wall)) = (
+                } else if let (Ok(entity), Ok(_wall)) = (
                     ball.get_mut(b.rigid_body_entity()),
                     despawn_area.get(a.rigid_body_entity()),
                 ) {
@@ -409,7 +403,7 @@ fn ball_collisions(
     mut commands: Commands,
     mut events: EventReader<CollisionEvent>,
     ball: Query<(&Velocity, &Transform), With<Ball>>,
-    board: Res<Board>,
+    _board: Res<Board>,
     images: Res<ImageAssets>,
 ) {
     for event in events.iter() {
@@ -427,7 +421,7 @@ fn ball_collisions(
                     None
                 };
 
-                if let Some((velocity, ball_transform)) =
+                if let Some((_velocity, ball_transform)) =
                     collider
                 {
                     dbg!("ball hit");
@@ -448,34 +442,6 @@ fn ball_collisions(
                             ..Default::default()
                         })
                         .insert(BallHit);
-                    // let x_diff = ball_transform
-                    //     .translation
-                    //     .x
-                    //     - paddle_transform.translation.x;
-
-                    // // a^2 + b^2 = c^2
-                    // let optimal_velocity: f32 =
-                    //     100.0 * 100.0 + 400.0 * 400.0;
-                    // let c = optimal_velocity.sqrt();
-
-                    // // TODO: Jacob says this `10` might need
-                    // // to be a function of the paddle width
-                    // let normalized = Vec2::new(
-                    //     x_diff * 7.5,
-                    //     velocity.linear.y,
-                    // )
-                    // .normalize();
-
-                    // // expand normalized parts back out into
-                    // // full magnitude
-                    // let new_velocity = normalized * c;
-
-                    // *velocity =
-                    //     Velocity::from_linear(Vec3::new(
-                    //         new_velocity.x,
-                    //         new_velocity.y,
-                    //         0.0,
-                    //     ))
                 }
             }
             CollisionEvent::Stopped(_, _) => {}
@@ -490,7 +456,7 @@ fn track_damage(
 ) {
     for event in events.iter() {
         match event {
-            CollisionEvent::Started(a, b) => {}
+            CollisionEvent::Started(_a, _b) => {}
             CollisionEvent::Stopped(a, b) => {
                 if let (Ok(_), Ok(mut block_damage)) = (
                     ball.get(a.rigid_body_entity()),
@@ -512,27 +478,69 @@ fn track_damage(
     }
 }
 
+#[derive(PartialEq, Eq)]
+enum WallCollision {
+    Left,
+    Right,
+}
 fn movement(
     input: Res<Input<KeyCode>>,
-    mut paddles: Query<&mut Velocity, With<Paddle>>,
+    mut paddles: Query<
+        (Entity, &Collisions, &mut Velocity),
+        With<Paddle>,
+    >,
+    wall: Query<
+        (Entity, &RigidBody),
+        With<PlayingAreaBorder>,
+    >,
 ) {
-    if input.pressed(KeyCode::A) {
-        for mut velocity in paddles.iter_mut() {
-            *velocity = Velocity::from_linear(Vec3::new(
-                -500.0, 0.0, 0.0,
-            ));
-        }
-    } else if input.pressed(KeyCode::D) {
-        for mut velocity in paddles.iter_mut() {
-            *velocity = Velocity::from_linear(Vec3::new(
-                500.0, 0.0, 0.0,
-            ));
-        }
-    } else {
-        for mut velocity in paddles.iter_mut() {
-            *velocity = Velocity::from_linear(Vec3::new(
-                0.0, 0.0, 0.0,
-            ));
+    let wall = wall.single();
+    for (_entity, collisions, mut velocity) in
+        paddles.iter_mut()
+    {
+        let mut wall_collision = None;
+        for collider in collisions.collision_data() {
+            if collider.rigid_body_entity() == wall.0 {
+                if collider.normals()[0][0] < 0. {
+                    wall_collision =
+                        Some(WallCollision::Left);
+                } else if collider.normals()[0][0] > 0. {
+                    wall_collision =
+                        Some(WallCollision::Right);
+                };
+            };
+
+            if input.pressed(KeyCode::A) {
+                if velocity.linear.x <= 0.
+                    && wall_collision
+                        == Some(WallCollision::Left)
+                {
+                    *velocity = Velocity::from_linear(
+                        Vec3::new(0.0, 0.0, 0.0),
+                    );
+                } else {
+                    *velocity = Velocity::from_linear(
+                        Vec3::new(-500.0, 0.0, 0.0),
+                    );
+                }
+            } else if input.pressed(KeyCode::D) {
+                if velocity.linear.x >= 0.
+                    && wall_collision
+                        == Some(WallCollision::Right)
+                {
+                    *velocity = Velocity::from_linear(
+                        Vec3::new(0.0, 0.0, 0.0),
+                    );
+                } else {
+                    *velocity = Velocity::from_linear(
+                        Vec3::new(500.0, 0.0, 0.0),
+                    );
+                }
+            } else {
+                *velocity = Velocity::from_linear(
+                    Vec3::new(0.0, 0.0, 0.0),
+                );
+            }
         }
     }
 }
@@ -595,6 +603,16 @@ fn powerup_collisions(
                             );
                         }
                         Powerup::Gunship => {
+                            dbg!(
+                                "Powerup not supported yet"
+                            );
+                        }
+                        Powerup::Sticky => {
+                            dbg!(
+                                "Powerup not supported yet"
+                            );
+                        }
+                        Powerup::Life => {
                             dbg!(
                                 "Powerup not supported yet"
                             );

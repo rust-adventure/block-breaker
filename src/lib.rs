@@ -45,6 +45,8 @@ pub enum Powerup {
     TripleBall,
     WidePaddle,
     Gunship,
+    Sticky,
+    Life,
 }
 
 pub struct SpawnThreeBallsEvent;

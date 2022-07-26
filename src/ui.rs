@@ -20,7 +20,7 @@ use kayak_ui::{
             Units,
         },
         use_state, widget, Binding, Bound, Color,
-        EventType, Handler, Index, MutableBound, OnEvent,
+        EventType, Index, MutableBound, OnEvent,
     },
     widgets::{App, Element, If, NinePatch, Text},
 };
