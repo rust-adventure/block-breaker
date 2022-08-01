@@ -3,7 +3,7 @@ use bevy::{
     sprite::MaterialMesh2dBundle,
 };
 use bevy_prototype_lyon::prelude::*;
-use heron::prelude::*;
+use bevy_rapier2d::prelude::*;
 
 use crate::{
     board::{self, Board},
@@ -28,7 +28,7 @@ impl Command for SpawnBall {
             .insert_bundle(GeometryBuilder::build_as(
                 &shape,
                 DrawMode::Outlined {
-                    fill_mode: FillMode::color(
+                    fill_mode: bevy_prototype_lyon::prelude::FillMode::color(
                         Color::WHITE,
                     ),
                     outline_mode: StrokeMode::new(
@@ -59,15 +59,22 @@ impl Command for SpawnBall {
             //     ..default()
             // })
             .insert(RigidBody::Dynamic)
-            .insert(PhysicMaterial {
-                restitution: 1.0,
-                friction: 0.0,
-                ..Default::default()
+            .insert(Restitution {
+                coefficient: 1.0,
+                combine_rule: CoefficientCombineRule::Min,
             })
-            .insert(CollisionShape::Sphere { radius: 10.0 })
+            .insert(Friction {
+                coefficient: 0.0,
+                combine_rule: CoefficientCombineRule::Min,
+            })
+            // .insert(
+            //     ColliderMassProperties::Density,
+            // )
+            .insert(Collider::ball(10.0))
             .insert(self.velocity)
             .insert(Ball)
-            .insert(RotationConstraints::lock());
+            .insert(LockedAxes::ROTATION_LOCKED)
+            .insert(GravityScale(0.0));
     }
 }
 
@@ -117,20 +124,27 @@ impl Command for SpawnPowerup {
                     )),
                 ..default()
             })
-            .insert(RigidBody::Sensor)
-            .insert(PhysicMaterial {
-                restitution: 1.0,
-                friction: 0.0,
-                ..Default::default()
+            .insert(Sensor)
+            .insert(Restitution {
+                coefficient: 1.0,
+                combine_rule: CoefficientCombineRule::Min,
             })
-            .insert(CollisionShape::Capsule {
-                radius: 10.0,
-                half_segment: 20.0,
+            .insert(Friction {
+                coefficient: 0.0,
+                combine_rule: CoefficientCombineRule::Min,
             })
-            .insert(Velocity::from_linear(Vec3::new(
-                0.0, -400.0, 0.0,
+            // .insert(
+            //     ColliderMassProperties::Density,
+            // )
+            .insert(Collider::capsule(
+                Vec2::new(-20.0, 20.0),
+                Vec2::new(-20.0, 20.0),
+                10.0,
+            ))
+            .insert(Velocity::linear(Vec2::new(
+                0.0, -400.0,
             )))
-            .insert(RotationConstraints::lock())
+            .insert(LockedAxes::ROTATION_LOCKED)
             .insert(Powerup::TripleBall);
     }
 }
@@ -190,20 +204,19 @@ impl Command for SpawnLevel {
                             ),
                             ..Default::default()
                         })
-                        .insert(RigidBody::Static)
-                        .insert(CollisionShape::Cuboid {
-                            half_extends: Vec3::new(
-                                board::TILE_X_SIZE / 2.0,
-                                board::TILE_Y_SIZE / 2.0,
-                                1.0,
-                            ),
-                            border_radius: None,
+                        .insert(RigidBody::Fixed)
+                        .insert(Collider::cuboid(board::TILE_X_SIZE / 2.0, board::TILE_X_SIZE / 2.0))
+                        .insert(Restitution {
+                            coefficient: 1.0,
+                            combine_rule: CoefficientCombineRule::Min,
                         })
-                        .insert(PhysicMaterial {
-                            restitution: 1.0,
-                            friction: 0.0,
-                            ..Default::default()
+                        .insert(Friction {
+                            coefficient: 0.0,
+                            combine_rule: CoefficientCombineRule::Min,
                         })
+                        // .insert(
+                        //     ColliderMassProperties::Density,
+                        // )
                         .insert(*block)
                         .insert(Damage(0));
                 }
