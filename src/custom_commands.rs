@@ -166,10 +166,6 @@ impl Command for SpawnLevel {
                 row.iter().enumerate()
             {
                 if let Some(block) = column {
-                    println!(
-                        "brick {} {}",
-                        row_index, column_index
-                    );
                     world.spawn()
                         .insert_bundle(SpriteBundle {
                             sprite: Sprite {
@@ -205,7 +201,7 @@ impl Command for SpawnLevel {
                             ..Default::default()
                         })
                         .insert(RigidBody::Fixed)
-                        .insert(Collider::cuboid(board::TILE_X_SIZE / 2.0, board::TILE_X_SIZE / 2.0))
+                        .insert(Collider::cuboid(board::TILE_X_SIZE / 2.0, board::TILE_X_SIZE / 4.0))
                         .insert(Restitution {
                             coefficient: 1.0,
                             combine_rule: CoefficientCombineRule::Min,

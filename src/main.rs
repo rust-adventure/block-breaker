@@ -10,14 +10,6 @@ use block_breaker::{
 
 use bevy::{prelude::*, sprite::Anchor};
 use bevy_prototype_lyon::prelude::*;
-// use heron::{
-//     prelude::*,
-//     rapier_plugin::{
-//         nalgebra::Point2,
-//         rapier2d::prelude::ColliderBuilder,
-//     },
-//     CustomCollisionShape,
-// };
 use bevy_rapier2d::prelude::*;
 use iyes_loopless::prelude::*;
 
@@ -30,6 +22,7 @@ fn main() {
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(UiPlugin)
         .add_plugin(AssetsPlugin)
+        .add_plugin(ShapePlugin)
         .insert_resource(ClearColor(Color::rgb(
             0.5, 0.5, 0.5,
         )))
