@@ -23,7 +23,7 @@ impl Command for SpawnBall {
             ..Default::default()
         };
 
-        world
+        let ball_id = world
             .spawn()
             .insert_bundle(GeometryBuilder::build_as(
                 &shape,
@@ -74,7 +74,8 @@ impl Command for SpawnBall {
             .insert(self.velocity)
             .insert(Ball)
             .insert(LockedAxes::ROTATION_LOCKED)
-            .insert(GravityScale(0.0));
+            .insert(GravityScale(0.0)).id();
+        dbg!(ball_id);
     }
 }
 
@@ -107,21 +108,21 @@ impl Command for SpawnPowerup {
             let mut materials = world
                 .get_resource_mut::<Assets<ColorMaterial>>()
                 .unwrap();
-            materials
-                .add(ColorMaterial::from(Color::PURPLE))
+            materials.add(ColorMaterial::from(
+                Color::ANTIQUE_WHITE,
+            ))
         };
 
-        world
+        let powerup_id = world
             .spawn()
             .insert_bundle(MaterialMesh2dBundle {
                 mesh: capsule,
                 material: color_material,
-                transform: self
-                    .transform
-                    .clone()
-                    .with_rotation(Quat::from_rotation_z(
-                        std::f32::consts::FRAC_PI_2,
-                    )),
+                transform: self.transform,
+                // .clone()
+                // .with_rotation(Quat::from_rotation_z(
+                //     std::f32::consts::FRAC_PI_2,
+                // )),
                 ..default()
             })
             .insert(Sensor)
@@ -136,16 +137,15 @@ impl Command for SpawnPowerup {
             // .insert(
             //     ColliderMassProperties::Density,
             // )
-            .insert(Collider::capsule(
-                Vec2::new(-20.0, 20.0),
-                Vec2::new(-20.0, 20.0),
-                10.0,
-            ))
+            .insert(Collider::capsule_y(20.0, 10.0))
             .insert(Velocity::linear(Vec2::new(
                 0.0, -400.0,
             )))
             .insert(LockedAxes::ROTATION_LOCKED)
-            .insert(Powerup::TripleBall);
+            .insert(Powerup::TripleBall)
+            .insert(ActiveEvents::COLLISION_EVENTS)
+            .id();
+        dbg!(powerup_id);
     }
 }
 

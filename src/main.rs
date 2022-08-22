@@ -155,9 +155,11 @@ fn spawn_new_game(
             100.0, 400.0
         )))
         .insert(Ball)
-        .insert(LockedAxes::ROTATION_LOCKED);
+        .insert(GravityScale(0.0))
+        .insert(LockedAxes::ROTATION_LOCKED)
+        .insert(ActiveEvents::COLLISION_EVENTS);
 
-    commands
+    let paddle_id = commands
         .spawn_bundle(SpriteBundle {
             sprite: Sprite {
                 color: Color::BLACK,
@@ -190,8 +192,11 @@ fn spawn_new_game(
         .insert(Collider::cuboid(100.0, 10.0))
         .insert(Velocity::linear(Vec2::new(0.0, 0.0)))
         // .insert(Collisions::default())
-        .insert(Paddle);
+        .insert(Paddle)
+        .insert(ActiveEvents::COLLISION_EVENTS)
+        .id();
 
+    dbg!(paddle_id);
     // Playing Area Exterior
 
     commands.spawn_bundle(SpriteBundle {
@@ -308,15 +313,18 @@ fn paddle_collisions(
     for event in events.iter() {
         match event {
             CollisionEvent::Started(a, b, _) => {
+                // info!(?a, ?b, "paddle_collision");
                 let colliders = if let (Ok(a), Ok(b)) =
                     (ball.get_mut(*a), paddles.get(*b))
                 {
                     Some((a, b))
-                } else if let (Ok(a), Ok(b)) =
-                    (ball.get_mut(*b), paddles.get(*a))
-                {
-                    Some((a, b))
-                } else {
+                }
+                // else if let (Ok(a), Ok(b)) =
+                //     (ball.get_mut(*b), paddles.get(*a))
+                // {
+                //     Some((a, b))
+                // }
+                else {
                     None
                 };
 
@@ -367,6 +375,7 @@ fn despawn_area_collisions(
     for event in events.iter() {
         match event {
             CollisionEvent::Started(a, b, _) => {
+                // info!(?a, ?b, "despawn_event");
                 if let (Ok(entity), Ok(_wall)) =
                     (ball.get_mut(*a), despawn_area.get(*b))
                 {
@@ -397,6 +406,7 @@ fn ball_collisions(
     for event in events.iter() {
         match event {
             CollisionEvent::Started(a, b, _) => {
+                // info!(?a, ?b, "ball_collision");
                 let collider = if let Ok(a) = ball.get(*a) {
                     Some(a)
                 } else if let Ok(b) = ball.get(*b) {
@@ -408,7 +418,7 @@ fn ball_collisions(
                 if let Some((_velocity, ball_transform)) =
                     collider
                 {
-                    dbg!("ball hit");
+                    // dbg!("ball hit");
 
                     commands
                         .spawn_bundle(SpriteBundle {
@@ -526,35 +536,34 @@ fn movement(
 //             };
 
 //             if input.pressed(KeyCode::A) {
-//                 if velocity.linear.x <= 0.
+//                 if velocity.linvel.x <= 0.
 //                     && wall_collision
 //                         == Some(WallCollision::Left)
 //                 {
-//                     *velocity = Velocity::from_linear(
-//                         Vec3::new(0.0, 0.0, 0.0),
+//                     *velocity = Velocity::linear(
+//                         Vec2::new(0.0, 0.0),
 //                     );
 //                 } else {
-//                     *velocity = Velocity::from_linear(
-//                         Vec3::new(-500.0, 0.0, 0.0),
+//                     *velocity = Velocity::linear(
+//                         Vec2::new(-500.0, 0.0),
 //                     );
 //                 }
 //             } else if input.pressed(KeyCode::D) {
-//                 if velocity.linear.x >= 0.
+//                 if velocity.linvel.x >= 0.
 //                     && wall_collision
 //                         == Some(WallCollision::Right)
 //                 {
-//                     *velocity = Velocity::from_linear(
-//                         Vec3::new(0.0, 0.0, 0.0),
+//                     *velocity = Velocity::linear(
+//                         Vec2::new(0.0, 0.0),
 //                     );
 //                 } else {
-//                     *velocity = Velocity::from_linear(
-//                         Vec3::new(500.0, 0.0, 0.0),
+//                     *velocity = Velocity::linear(
+//                         Vec2::new(500.0, 0.0),
 //                     );
 //                 }
 //             } else {
-//                 *velocity = Velocity::from_linear(
-//                     Vec3::new(0.0, 0.0, 0.0),
-//                 );
+//                 *velocity =
+//                     Velocity::linear(Vec2::new(0.0, 0.0));
 //             }
 //         }
 //     }
@@ -570,75 +579,44 @@ fn powerup_gravity(
 
 fn powerup_collisions(
     mut commands: Commands,
-    mut events: EventReader<CollisionEvent>,
+    rapier_context: Res<RapierContext>,
+    powerups: Query<(Entity, &Powerup)>,
     paddle: Query<Entity, With<Paddle>>,
-    powerup: Query<(Entity, &Powerup)>,
     mut three_balls: EventWriter<SpawnThreeBallsEvent>,
 ) {
-    for event in events.iter() {
-        match event {
-            CollisionEvent::Started(a, b, _) => {
-                let powerup = {
-                    let a_entity = *a;
-                    let b_entity = *b;
+    let paddle = paddle.single();
+    for (powerup_sensor, powerup) in powerups.iter() {
+        match rapier_context
+            .intersection_pair(paddle, powerup_sensor)
+        {
+            Some(_) => {
+                commands
+                    .entity(powerup_sensor)
+                    .despawn_recursive();
 
-                    if let (Ok(_), Ok((entity, powerup))) = (
-                        paddle.get(a_entity),
-                        powerup.get(b_entity),
-                    ) {
-                        commands
-                            .entity(entity)
-                            .despawn_recursive();
-                        Some(powerup)
-                    } else if let (
-                        Ok(_),
-                        Ok((entity, powerup)),
-                    ) = (
-                        paddle.get(b_entity),
-                        powerup.get(a_entity),
-                    ) {
-                        commands
-                            .entity(entity)
-                            .despawn_recursive();
-                        Some(powerup)
-                    } else {
-                        None
+                match powerup {
+                    Powerup::TripleBall => {
+                        three_balls
+                            .send(SpawnThreeBallsEvent);
                     }
-                };
-
-                if let Some(powerup) = powerup {
-                    match powerup {
-                        Powerup::TripleBall => {
-                            three_balls
-                                .send(SpawnThreeBallsEvent);
-                        }
-                        Powerup::WidePaddle => {
-                            dbg!(
-                                "Powerup not supported yet"
-                            );
-                        }
-                        Powerup::Gunship => {
-                            dbg!(
-                                "Powerup not supported yet"
-                            );
-                        }
-                        Powerup::Sticky => {
-                            dbg!(
-                                "Powerup not supported yet"
-                            );
-                        }
-                        Powerup::Life => {
-                            dbg!(
-                                "Powerup not supported yet"
-                            );
-                        }
+                    Powerup::WidePaddle => {
+                        dbg!("Powerup not supported yet");
+                    }
+                    Powerup::Gunship => {
+                        dbg!("Powerup not supported yet");
+                    }
+                    Powerup::Sticky => {
+                        dbg!("Powerup not supported yet");
+                    }
+                    Powerup::Life => {
+                        dbg!("Powerup not supported yet");
                     }
                 }
             }
-            CollisionEvent::Stopped(_, _, _) => {
-                // dbg!("stopped");
+            None => {
+                // info!("none");
             }
-        }
+        };
     }
 }
 
