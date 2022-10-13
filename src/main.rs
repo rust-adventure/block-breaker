@@ -60,14 +60,18 @@ fn setup(
     images: Res<ImageAssets>,
     board: Res<Board>,
 ) {
-    let mut camera = OrthographicCameraBundle::new_2d();
-    camera.transform = Transform::from_xyz(
-        board.physical.x / 2.0,
-        board.physical.y / 2.0,
-        1000.0,
-    );
-    camera.orthographic_projection.scale = 2.0;
-    commands.spawn_bundle(camera);
+    commands.spawn_bundle(Camera2dBundle {
+        projection: OrthographicProjection {
+            scale: 2.0,
+            ..default()
+        },
+        transform: Transform::from_xyz(
+            board.physical.x / 2.0,
+            board.physical.y / 2.0,
+            1000.0,
+        ),
+        ..default()
+    });
 
     commands.spawn_bundle(SpriteBundle {
         sprite: Sprite {

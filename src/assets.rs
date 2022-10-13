@@ -1,7 +1,5 @@
 use bevy::prelude::*;
-use bevy_asset_loader::{
-    AssetCollection, AssetCollectionApp,
-};
+use bevy_asset_loader::prelude::*;
 
 pub struct AssetsPlugin;
 
