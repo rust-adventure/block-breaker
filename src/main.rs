@@ -8,21 +8,34 @@ use block_breaker::{
     SpawnThreeBallsEvent, *,
 };
 
-use bevy::{prelude::*, sprite::Anchor};
+use bevy::{
+    prelude::*,
+    render::settings::{WgpuFeatures, WgpuSettings},
+    sprite::Anchor,
+};
+use bevy_hanabi::prelude::*;
 use bevy_prototype_lyon::prelude::*;
 use bevy_rapier2d::prelude::*;
 use iyes_loopless::prelude::*;
 
 fn main() {
+    // let mut options = WgpuSettings::default();
+    // options.features.set(
+    //     WgpuFeatures::VERTEX_WRITABLE_STORAGE,
+    //     true,
+    // );
+
     App::new()
         .insert_resource(Msaa { samples: 4 })
         .insert_resource(Board::new(11, 28))
+        // .insert_resource(options)
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(UiPlugin)
         .add_plugin(AssetsPlugin)
         .add_plugin(ShapePlugin)
+        .add_plugin(HanabiPlugin)
         .insert_resource(ClearColor(Color::rgb(
             0.5, 0.5, 0.5,
         )))
@@ -93,10 +106,13 @@ fn setup(
     });
 }
 
+const BALL_RADIUS: f32 = 20.05;
+
 fn spawn_new_game(
     mut commands: Commands,
     _images: Res<ImageAssets>,
     board: Res<Board>,
+    mut effects: ResMut<Assets<EffectAsset>>,
 ) {
     let shape = shapes::Circle {
         radius: 10.0,
@@ -305,6 +321,40 @@ fn spawn_new_game(
         .insert(DespawnArea);
 
     commands.add(SpawnLevel { level: 1 });
+
+    let mut gradient = Gradient::new();
+    gradient.add_key(0.0, Vec4::new(1.0, 0.0, 0.0, 1.0));
+    gradient.add_key(1.0, Vec4::new(1.0, 0.0, 1.0, 0.0));
+
+    let spawner = Spawner::once(30.0.into(), false);
+    let effect = effects.add(
+        EffectAsset {
+            name: "Impact".into(),
+            capacity: 32768,
+            spawner,
+            ..Default::default()
+        }
+        .init(PositionCircleModifier {
+            axis: Vec3::Z,
+            radius: BALL_RADIUS,
+            speed: 10.2.into(),
+            dimension: ShapeDimension::Surface,
+            ..Default::default()
+        })
+        .render(SizeOverLifetimeModifier {
+            gradient: Gradient::constant(Vec2::splat(
+                10.05,
+            )),
+        })
+        .render(ColorOverLifetimeModifier { gradient }),
+    );
+
+    commands
+        .spawn_bundle(
+            ParticleEffectBundle::new(effect)
+                .with_spawner(spawner),
+        )
+        .insert(Name::new("effect"));
 }
 fn paddle_collisions(
     mut events: EventReader<CollisionEvent>,
@@ -406,6 +456,10 @@ fn ball_collisions(
     ball: Query<(&Velocity, &Transform), With<Ball>>,
     _board: Res<Board>,
     images: Res<ImageAssets>,
+    mut effect: Query<
+        (&mut ParticleEffect, &mut Transform),
+        Without<Ball>,
+    >,
 ) {
     for event in events.iter() {
         match event {
@@ -424,22 +478,30 @@ fn ball_collisions(
                 {
                     // dbg!("ball hit");
 
-                    commands
-                        .spawn_bundle(SpriteBundle {
-                            sprite: Sprite {
-                                custom_size: Some(
-                                    Vec2::new(10.0, 10.0),
-                                ),
-                                ..Default::default()
-                            },
-                            texture: images
-                                .ball_hit
-                                .clone(),
-                            transform: ball_transform
-                                .clone(),
-                            ..Default::default()
-                        })
-                        .insert(BallHit);
+                    // commands
+                    //     .spawn_bundle(SpriteBundle {
+                    //         sprite: Sprite {
+                    //             custom_size: Some(
+                    //                 Vec2::new(10.0, 10.0),
+                    //             ),
+                    //             ..Default::default()
+                    //         },
+                    //         texture: images
+                    //             .ball_hit
+                    //             .clone(),
+                    //         transform: ball_transform
+                    //             .clone(),
+                    //         ..Default::default()
+                    //     })
+                    //     .insert(BallHit);
+
+                    let (mut effect, mut effect_transform) =
+                        effect.single_mut();
+                    effect_transform.translation =
+                        ball_transform.translation;
+                    effect_transform.translation.z = 10.0;
+                    // Spawn the particles
+                    effect.maybe_spawner().unwrap().reset();
                 }
             }
             CollisionEvent::Stopped(_, _, _) => {}
