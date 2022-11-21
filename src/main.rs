@@ -19,16 +19,16 @@ use bevy_rapier2d::prelude::*;
 use iyes_loopless::prelude::*;
 
 fn main() {
-    // let mut options = WgpuSettings::default();
-    // options.features.set(
-    //     WgpuFeatures::VERTEX_WRITABLE_STORAGE,
-    //     true,
-    // );
+    let mut options = WgpuSettings::default();
+    options.features.set(
+        WgpuFeatures::VERTEX_WRITABLE_STORAGE,
+        true,
+    );
 
     App::new()
         .insert_resource(Msaa { samples: 4 })
         .insert_resource(Board::new(11, 28))
-        // .insert_resource(options)
+        .insert_resource(options)
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .add_plugin(RapierDebugRenderPlugin::default())
@@ -39,9 +39,6 @@ fn main() {
         .insert_resource(ClearColor(Color::rgb(
             0.5, 0.5, 0.5,
         )))
-        // .insert_resource(Gravity::from(Vec3::new(
-        //     0.0, 0.0, 0.0,
-        // )))
         .add_loopless_state(STARTING_GAME_STATE)
         .add_plugin(ScorePlugin)
         .add_event::<SpawnThreeBallsEvent>()
@@ -49,7 +46,6 @@ fn main() {
         .add_system_set(
             ConditionSet::new()
                 .run_in_state(GameState::Playing)
-                .with_system(paddle_collisions)
                 .with_system(despawn_area_collisions)
                 .with_system(ball_collisions)
                 .with_system(movement)
@@ -58,7 +54,6 @@ fn main() {
                 .with_system(powerup_gravity)
                 .with_system(powerup_collisions)
                 .with_system(three_balls_events)
-                .with_system(particles::ball_hit_particles)
                 .into(),
         )
         .add_enter_system(
@@ -119,6 +114,10 @@ fn spawn_new_game(
         ..Default::default()
     };
 
+    // commands.add(SpawnBall{
+    //     velocity: todo!(),
+    //     transform: todo!(),
+    // });
     commands
         .spawn_bundle(GeometryBuilder::build_as(
             &shape,
@@ -197,20 +196,26 @@ fn spawn_new_game(
             ),
             ..Default::default()
         })
-        .insert(RigidBody::KinematicVelocityBased)
-        .insert(Restitution {
-            coefficient: 1.0,
-            combine_rule: CoefficientCombineRule::Min,
-        })
-        .insert(Friction {
-            coefficient: 0.0,
-            combine_rule: CoefficientCombineRule::Min,
-        })
+        // .insert(Restitution {
+        //     coefficient: 1.0,
+        //     combine_rule: CoefficientCombineRule::Min,
+        // })
+        // .insert(Friction {
+        //     coefficient: 0.0,
+        //     combine_rule: CoefficientCombineRule::Min,
+        // })
         // .insert(
         //     ColliderMassProperties::Density,
         // )
+        .insert(RigidBody::KinematicPositionBased)
+        .insert(KinematicCharacterController {
+            // filter_flags: QueryFilterFlags::EXCLUDE_FIXED,
+            // filter_groups: Some(),
+            // apply_impulse_to_dynamic_bodies: true,
+            ..default()
+        })
         .insert(Collider::cuboid(100.0, 10.0))
-        .insert(Velocity::linear(Vec2::new(0.0, 0.0)))
+        // .insert(Velocity::linear(Vec2::new(0.0, 0.0)))
         // .insert(Collisions::default())
         .insert(Paddle)
         .insert(ActiveEvents::COLLISION_EVENTS)
@@ -305,7 +310,11 @@ fn spawn_new_game(
                     3,
                     board::Axis::Y,
                 ))
-                / 2.0,
+                / 2.0
+                // -10.0 is a magic number meant to move the despawn area
+                // beneath the paddle completely so there are no possible paddle/despawn 
+                // collision events.
+                - 10.0,
             0.0,
         ))
         .insert(Sensor)
@@ -356,69 +365,6 @@ fn spawn_new_game(
         )
         .insert(Name::new("effect"));
 }
-fn paddle_collisions(
-    mut events: EventReader<CollisionEvent>,
-    paddles: Query<(Entity, &Transform), With<Paddle>>,
-    mut ball: Query<
-        (&mut Velocity, &Transform),
-        With<Ball>,
-    >,
-) {
-    for event in events.iter() {
-        match event {
-            CollisionEvent::Started(a, b, _) => {
-                // info!(?a, ?b, "paddle_collision");
-                let colliders = if let (Ok(a), Ok(b)) =
-                    (ball.get_mut(*a), paddles.get(*b))
-                {
-                    Some((a, b))
-                }
-                // else if let (Ok(a), Ok(b)) =
-                //     (ball.get_mut(*b), paddles.get(*a))
-                // {
-                //     Some((a, b))
-                // }
-                else {
-                    None
-                };
-
-                if let Some((
-                    (mut velocity, ball_transform),
-                    (_, paddle_transform),
-                )) = colliders
-                {
-                    let x_diff = ball_transform
-                        .translation
-                        .x
-                        - paddle_transform.translation.x;
-
-                    // a^2 + b^2 = c^2
-                    let optimal_velocity: f32 =
-                        100.0 * 100.0 + 400.0 * 400.0;
-                    let c = optimal_velocity.sqrt();
-
-                    // TODO: Jacob says this `10` might need
-                    // to be a function of the paddle width
-                    let normalized = Vec2::new(
-                        x_diff * 7.5,
-                        velocity.linvel.y,
-                    )
-                    .normalize();
-
-                    // expand normalized parts back out into
-                    // full magnitude
-                    let new_velocity = normalized * c;
-
-                    *velocity = Velocity::linear(Vec2::new(
-                        new_velocity.x,
-                        new_velocity.y,
-                    ))
-                }
-            }
-            CollisionEvent::Stopped(_, _, _) => {}
-        }
-    }
-}
 
 fn despawn_area_collisions(
     mut commands: Commands,
@@ -453,48 +399,37 @@ fn despawn_area_collisions(
 fn ball_collisions(
     mut commands: Commands,
     mut events: EventReader<CollisionEvent>,
-    ball: Query<(&Velocity, &Transform), With<Ball>>,
-    _board: Res<Board>,
-    images: Res<ImageAssets>,
+    mut balls: Query<
+        (&mut Velocity, &Transform),
+        (With<Ball>, Without<Paddle>),
+    >,
+    paddles: Query<
+        (Entity, &Transform),
+        (With<Paddle>, Without<Ball>),
+    >,
     mut effect: Query<
         (&mut ParticleEffect, &mut Transform),
-        Without<Ball>,
+        (Without<Ball>, Without<Paddle>),
     >,
 ) {
     for event in events.iter() {
         match event {
             CollisionEvent::Started(a, b, _) => {
                 // info!(?a, ?b, "ball_collision");
-                let collider = if let Ok(a) = ball.get(*a) {
+                let mut ball = if let Ok(a) =
+                    balls.get_mut(*a)
+                {
                     Some(a)
-                } else if let Ok(b) = ball.get(*b) {
+                } else if let Ok(b) = balls.get_mut(*b) {
                     Some(b)
                 } else {
                     None
                 };
 
+                // spawn particle at ball location
                 if let Some((_velocity, ball_transform)) =
-                    collider
+                    &ball
                 {
-                    // dbg!("ball hit");
-
-                    // commands
-                    //     .spawn_bundle(SpriteBundle {
-                    //         sprite: Sprite {
-                    //             custom_size: Some(
-                    //                 Vec2::new(10.0, 10.0),
-                    //             ),
-                    //             ..Default::default()
-                    //         },
-                    //         texture: images
-                    //             .ball_hit
-                    //             .clone(),
-                    //         transform: ball_transform
-                    //             .clone(),
-                    //         ..Default::default()
-                    //     })
-                    //     .insert(BallHit);
-
                     let (mut effect, mut effect_transform) =
                         effect.single_mut();
                     effect_transform.translation =
@@ -502,6 +437,48 @@ fn ball_collisions(
                     effect_transform.translation.z = 10.0;
                     // Spawn the particles
                     effect.maybe_spawner().unwrap().reset();
+                }
+
+                let paddle = if let Ok(a) = paddles.get(*a)
+                {
+                    Some(a)
+                } else if let Ok(b) = paddles.get(*b) {
+                    Some(b)
+                } else {
+                    None
+                };
+                if let (
+                    Some((velocity, ball_transform)),
+                    Some((_, paddle_transform)),
+                ) = (&mut ball, paddle)
+                {
+                    let x_diff = ball_transform
+                        .translation
+                        .x
+                        - paddle_transform.translation.x;
+
+                    // a^2 + b^2 = c^2
+                    let optimal_velocity: f32 =
+                        100.0 * 100.0 + 400.0 * 400.0;
+                    let c = optimal_velocity.sqrt();
+
+                    // TODO: Jacob says this `10` might need
+                    // to be a function of the paddle width
+                    let normalized = Vec2::new(
+                        x_diff * 7.5,
+                        velocity.linvel.y,
+                    )
+                    .normalize();
+
+                    // expand normalized parts back out into
+                    // full magnitude
+                    let new_velocity = normalized * c;
+
+                    **velocity =
+                        Velocity::linear(Vec2::new(
+                            new_velocity.x,
+                            new_velocity.y.abs(),
+                        ))
                 }
             }
             CollisionEvent::Stopped(_, _, _) => {}
@@ -536,104 +513,38 @@ fn track_damage(
     }
 }
 
-#[derive(PartialEq, Eq)]
-enum WallCollision {
-    Left,
-    Right,
-}
+const PADDLE_SPEED: f32 = 5.0;
 fn movement(
     input: Res<Input<KeyCode>>,
-    mut paddles: Query<
-        (
-            Entity,
-            /*&Collisions,*/ &mut Velocity,
-        ),
+    mut controllers: Query<
+        &mut KinematicCharacterController,
         With<Paddle>,
     >,
-    wall: Query<
-        (Entity, &RigidBody),
-        With<PlayingAreaBorder>,
-    >,
 ) {
-    let wall = wall.single();
-    for (_entity, /*collisions,*/ mut velocity) in
-        paddles.iter_mut()
-    {
+    for mut controller in controllers.iter_mut() {
         if input.pressed(KeyCode::A) {
-            *velocity =
-                Velocity::linear(Vec2::new(-500.0, 0.0));
+            controller.translation = match controller
+                .translation
+            {
+                Some(mut vector) => {
+                    vector.x = -PADDLE_SPEED;
+                    Some(vector)
+                }
+                None => Some(Vec2::new(-PADDLE_SPEED, 0.0)),
+            }
         } else if input.pressed(KeyCode::D) {
-            *velocity =
-                Velocity::linear(Vec2::new(500.0, 0.0));
-        } else {
-            *velocity =
-                Velocity::linear(Vec2::new(0.0, 0.0));
+            controller.translation = match controller
+                .translation
+            {
+                Some(mut vector) => {
+                    vector.x = PADDLE_SPEED;
+                    Some(vector)
+                }
+                None => Some(Vec2::new(PADDLE_SPEED, 0.0)),
+            }
         }
     }
 }
-// fn movement(
-//     input: Res<Input<KeyCode>>,
-//     mut paddles: Query<
-//         (
-//             Entity,
-//             /*&Collisions,*/ &mut Velocity,
-//         ),
-//         With<Paddle>,
-//     >,
-//     wall: Query<
-//         (Entity, &RigidBody),
-//         With<PlayingAreaBorder>,
-//     >,
-// ) {
-//     let wall = wall.single();
-//     for (_entity, /*collisions,*/ mut velocity) in
-//         paddles.iter_mut()
-//     {
-//         let mut wall_collision = None;
-//         for collider in collisions.collision_data() {
-//             if collider.rigid_body_entity() == wall.0 {
-//                 if collider.normals()[0][0] < 0. {
-//                     wall_collision =
-//                         Some(WallCollision::Left);
-//                 } else if collider.normals()[0][0] > 0. {
-//                     wall_collision =
-//                         Some(WallCollision::Right);
-//                 };
-//             };
-
-//             if input.pressed(KeyCode::A) {
-//                 if velocity.linvel.x <= 0.
-//                     && wall_collision
-//                         == Some(WallCollision::Left)
-//                 {
-//                     *velocity = Velocity::linear(
-//                         Vec2::new(0.0, 0.0),
-//                     );
-//                 } else {
-//                     *velocity = Velocity::linear(
-//                         Vec2::new(-500.0, 0.0),
-//                     );
-//                 }
-//             } else if input.pressed(KeyCode::D) {
-//                 if velocity.linvel.x >= 0.
-//                     && wall_collision
-//                         == Some(WallCollision::Right)
-//                 {
-//                     *velocity = Velocity::linear(
-//                         Vec2::new(0.0, 0.0),
-//                     );
-//                 } else {
-//                     *velocity = Velocity::linear(
-//                         Vec2::new(500.0, 0.0),
-//                     );
-//                 }
-//             } else {
-//                 *velocity =
-//                     Velocity::linear(Vec2::new(0.0, 0.0));
-//             }
-//         }
-//     }
-// }
 
 fn powerup_gravity(
     mut powerups: Query<&mut Transform, With<Powerup>>,

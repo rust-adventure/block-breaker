@@ -74,6 +74,7 @@ impl Command for SpawnBall {
             .insert(self.velocity)
             .insert(Ball)
             .insert(LockedAxes::ROTATION_LOCKED)
+            .insert(ActiveEvents::COLLISION_EVENTS)
             .insert(GravityScale(0.0)).id();
         dbg!(ball_id);
     }
