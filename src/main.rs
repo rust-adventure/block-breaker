@@ -68,7 +68,7 @@ fn setup(
     images: Res<ImageAssets>,
     board: Res<Board>,
 ) {
-    commands.spawn_bundle(Camera2dBundle {
+    commands.spawn(Camera2dBundle {
         projection: OrthographicProjection {
             scale: 2.0,
             ..default()
@@ -81,7 +81,7 @@ fn setup(
         ..default()
     });
 
-    commands.spawn_bundle(SpriteBundle {
+    commands.spawn(SpriteBundle {
         sprite: Sprite {
             // color: todo!(),
             custom_size: Some(Vec2::new(
@@ -119,7 +119,7 @@ fn spawn_new_game(
     //     transform: todo!(),
     // });
     commands
-        .spawn_bundle(GeometryBuilder::build_as(
+        .spawn(GeometryBuilder::build_as(
             &shape,
             DrawMode::Outlined {
                 fill_mode: bevy_prototype_lyon::prelude::FillMode::color(Color::WHITE),
@@ -166,9 +166,6 @@ fn spawn_new_game(
             coefficient: 0.0,
             combine_rule: CoefficientCombineRule::Min,
         })
-        // .insert(
-        //     ColliderMassProperties::Density,
-        // )
         .insert(Collider::ball(10.0))
         .insert(Velocity::linear(Vec2::new(
             100.0, 400.0
@@ -179,52 +176,38 @@ fn spawn_new_game(
         .insert(ActiveEvents::COLLISION_EVENTS);
 
     let paddle_id = commands
-        .spawn_bundle(SpriteBundle {
-            sprite: Sprite {
-                color: Color::BLACK,
-                custom_size: Some(Vec2::new(200.0, 20.0)),
+        .spawn((
+            SpriteBundle {
+                sprite: Sprite {
+                    color: Color::BLACK,
+                    custom_size: Some(Vec2::new(
+                        200.0, 20.0,
+                    )),
+                    ..Default::default()
+                },
+                transform: Transform::from_xyz(
+                    board.physical.x / 2.0,
+                    board.physical.y / 2.0
+                        + board.u8_cell_to_physical(
+                            3,
+                            board::Axis::Y,
+                        ),
+                    5.0,
+                ),
                 ..Default::default()
             },
-            transform: Transform::from_xyz(
-                board.physical.x / 2.0,
-                board.physical.y / 2.0
-                    + board.u8_cell_to_physical(
-                        3,
-                        board::Axis::Y,
-                    ),
-                5.0,
-            ),
-            ..Default::default()
-        })
-        // .insert(Restitution {
-        //     coefficient: 1.0,
-        //     combine_rule: CoefficientCombineRule::Min,
-        // })
-        // .insert(Friction {
-        //     coefficient: 0.0,
-        //     combine_rule: CoefficientCombineRule::Min,
-        // })
-        // .insert(
-        //     ColliderMassProperties::Density,
-        // )
-        .insert(RigidBody::KinematicPositionBased)
-        .insert(KinematicCharacterController {
-            // filter_flags: QueryFilterFlags::EXCLUDE_FIXED,
-            // filter_groups: Some(),
-            // apply_impulse_to_dynamic_bodies: true,
-            ..default()
-        })
-        .insert(Collider::cuboid(100.0, 10.0))
-        // .insert(Velocity::linear(Vec2::new(0.0, 0.0)))
-        // .insert(Collisions::default())
-        .insert(Paddle)
-        .insert(ActiveEvents::COLLISION_EVENTS)
+            RigidBody::KinematicPositionBased,
+            KinematicCharacterController::default(),
+            Collider::cuboid(100.0, 10.0),
+            Paddle,
+            ActiveEvents::COLLISION_EVENTS,
+        ))
         .id();
 
     dbg!(paddle_id);
     // Playing Area Exterior
 
-    commands.spawn_bundle(SpriteBundle {
+    commands.spawn(SpriteBundle {
         sprite: Sprite {
             color: Color::Rgba {
                 red: 1.0,
@@ -252,7 +235,7 @@ fn spawn_new_game(
         ..Default::default()
     };
 
-    commands.spawn_bundle(GeometryBuilder::build_as(
+    commands.spawn(GeometryBuilder::build_as(
         &shape,
         DrawMode::Outlined {
             fill_mode: bevy_prototype_lyon::prelude::FillMode::color(Color::rgba(
@@ -270,22 +253,18 @@ fn spawn_new_game(
         ),
     ));
 
-    commands
-        .spawn()
-        .insert(GlobalTransform::default())
-        .insert(RigidBody::Fixed)
-        .insert(Restitution {
+    commands.spawn((
+        SpatialBundle::default(),
+        RigidBody::Fixed,
+        Restitution {
             coefficient: 1.0,
             combine_rule: CoefficientCombineRule::Min,
-        })
-        .insert(Friction {
+        },
+        Friction {
             coefficient: 0.0,
             combine_rule: CoefficientCombineRule::Min,
-        })
-        // .insert(
-        //     ColliderMassProperties::Density,
-        // )
-        .insert(Collider::polyline(
+        },
+        Collider::polyline(
             vec![
                 Vect::new(0.0, 0.0),
                 Vect::new(board.physical.x, 0.0),
@@ -296,16 +275,16 @@ fn spawn_new_game(
                 Vect::new(0.0, board.physical.y),
             ],
             Some(vec![[0, 1], [1, 2], [2, 3], [3, 0]]),
-        ))
-        .insert(PlayingAreaBorder);
+        ),
+        PlayingAreaBorder,
+    ));
 
     // death area
-    commands
-        .spawn()
-        .insert(GlobalTransform::default())
-        .insert(Transform::from_xyz(
-            board.physical.x / 2.0,
-            (board.physical.y / 2.0
+    commands.spawn((
+        SpatialBundle {
+            transform: Transform::from_xyz(
+                board.physical.x / 2.0,
+                (board.physical.y / 2.0
                 + board.u8_cell_to_physical(
                     3,
                     board::Axis::Y,
@@ -315,10 +294,12 @@ fn spawn_new_game(
                 // beneath the paddle completely so there are no possible paddle/despawn 
                 // collision events.
                 - 10.0,
-            0.0,
-        ))
-        .insert(Sensor)
-        .insert(Collider::cuboid(
+                0.0,
+            ),
+            ..default()
+        },
+        Sensor,
+        Collider::cuboid(
             board.physical.x / 2.0,
             (board.physical.y / 2.0
                 + board.u8_cell_to_physical(
@@ -326,8 +307,9 @@ fn spawn_new_game(
                     board::Axis::Y,
                 ))
                 / 2.0,
-        ))
-        .insert(DespawnArea);
+        ),
+        DespawnArea,
+    ));
 
     commands.add(SpawnLevel { level: 1 });
 
@@ -358,12 +340,11 @@ fn spawn_new_game(
         .render(ColorOverLifetimeModifier { gradient }),
     );
 
-    commands
-        .spawn_bundle(
-            ParticleEffectBundle::new(effect)
-                .with_spawner(spawner),
-        )
-        .insert(Name::new("effect"));
+    commands.spawn((
+        ParticleEffectBundle::new(effect)
+            .with_spawner(spawner),
+        Name::new("effect"),
+    ));
 }
 
 fn despawn_area_collisions(

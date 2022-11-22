@@ -10,7 +10,7 @@ impl Plugin for AssetsPlugin {
     }
 }
 
-#[derive(AssetCollection)]
+#[derive(AssetCollection, Resource)]
 pub struct ImageAssets {
     #[asset(path = "uncolored_desert.png")]
     pub background: Handle<Image>,

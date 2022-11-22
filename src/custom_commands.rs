@@ -24,8 +24,7 @@ impl Command for SpawnBall {
         };
 
         let ball_id = world
-            .spawn()
-            .insert_bundle(GeometryBuilder::build_as(
+            .spawn(GeometryBuilder::build_as(
                 &shape,
                 DrawMode::Outlined {
                     fill_mode: bevy_prototype_lyon::prelude::FillMode::color(
@@ -67,9 +66,6 @@ impl Command for SpawnBall {
                 coefficient: 0.0,
                 combine_rule: CoefficientCombineRule::Min,
             })
-            // .insert(
-            //     ColliderMassProperties::Density,
-            // )
             .insert(Collider::ball(10.0))
             .insert(self.velocity)
             .insert(Ball)
@@ -115,44 +111,40 @@ impl Command for SpawnPowerup {
         };
 
         let powerup_id = world
-            .spawn()
-            .insert_bundle(MaterialMesh2dBundle {
-                mesh: capsule,
-                material: color_material,
-                transform: self.transform,
-                // .clone()
-                // .with_rotation(Quat::from_rotation_z(
-                //     std::f32::consts::FRAC_PI_2,
-                // )),
-                ..default()
-            })
-            .insert(Sensor)
-            .insert(Restitution {
-                coefficient: 1.0,
-                combine_rule: CoefficientCombineRule::Min,
-            })
-            .insert(Friction {
-                coefficient: 0.0,
-                combine_rule: CoefficientCombineRule::Min,
-            })
-            // .insert(
-            //     ColliderMassProperties::Density,
-            // )
-            .insert(Collider::capsule_y(20.0, 10.0))
-            .insert(Velocity::linear(Vec2::new(
-                0.0, -400.0,
-            )))
-            .insert(LockedAxes::ROTATION_LOCKED)
-            .insert(Powerup::TripleBall)
-            .insert(ActiveEvents::COLLISION_EVENTS)
+            .spawn((
+                MaterialMesh2dBundle {
+                    mesh: capsule,
+                    material: color_material,
+                    transform: self.transform,
+                    // .clone()
+                    // .with_rotation(Quat::from_rotation_z(
+                    //     std::f32::consts::FRAC_PI_2,
+                    // )),
+                    ..default()
+                },
+                Sensor,
+                Restitution {
+                    coefficient: 1.0,
+                    combine_rule:
+                        CoefficientCombineRule::Min,
+                },
+                Friction {
+                    coefficient: 0.0,
+                    combine_rule:
+                        CoefficientCombineRule::Min,
+                }, // ,
+                //     ColliderMassProperties::Density,
+                // )
+                Collider::capsule_y(20.0, 10.0),
+                Velocity::linear(Vec2::new(0.0, -400.0)),
+                LockedAxes::ROTATION_LOCKED,
+                Powerup::TripleBall,
+                ActiveEvents::COLLISION_EVENTS,
+            ))
             .id();
         dbg!(powerup_id);
     }
 }
-
-///
-///
-///
 
 pub struct SpawnLevel {
     pub level: usize,
@@ -167,18 +159,14 @@ impl Command for SpawnLevel {
                 row.iter().enumerate()
             {
                 if let Some(block) = column {
-                    world.spawn()
-                        .insert_bundle(SpriteBundle {
+                    world.spawn((
+                        SpriteBundle {
                             sprite: Sprite {
                                 color: block.color(),
-                                // color: Color::rgba(
-                                //     0.0, 0.0, 0.0, 0.0,
-                                // ),
                                 custom_size: Some(Vec2::new(
                                     board::TILE_X_SIZE,
                                     board::TILE_Y_SIZE,
                                 )),
-                                // anchor: Anchor::BottomLeft,
                                 ..Default::default()
                             },
                             transform: Transform::from_xyz(
@@ -200,22 +188,20 @@ impl Command for SpawnLevel {
                                 4.0,
                             ),
                             ..Default::default()
-                        })
-                        .insert(RigidBody::Fixed)
-                        .insert(Collider::cuboid(board::TILE_X_SIZE / 2.0, board::TILE_X_SIZE / 4.0))
-                        .insert(Restitution {
+                        }
+                        ,RigidBody::Fixed
+                        ,Collider::cuboid(board::TILE_X_SIZE / 2.0, board::TILE_X_SIZE / 4.0)
+                        ,Restitution {
                             coefficient: 1.0,
                             combine_rule: CoefficientCombineRule::Min,
-                        })
-                        .insert(Friction {
+                        }
+                        ,Friction {
                             coefficient: 0.0,
                             combine_rule: CoefficientCombineRule::Min,
-                        })
-                        // .insert(
-                        //     ColliderMassProperties::Density,
-                        // )
-                        .insert(*block)
-                        .insert(Damage(0));
+                        }
+                        ,*block
+                        ,Damage(0)
+                    ));
                 }
             }
         }

@@ -14,7 +14,7 @@ pub struct Physical {
     pub x: f32,
     pub y: f32,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Resource)]
 pub struct Board {
     pub size: Size,
     pub physical: Physical,

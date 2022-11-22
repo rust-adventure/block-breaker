@@ -23,14 +23,14 @@ impl Block {
         // based on #c6eefe
         match self {
             White => Color::WHITE,
-            Orange => Color::hex("fef2c6").unwrap(), //Color::ORANGE,
-            LightBlue => Color::hex("c6eefe").unwrap(), //Color::ALICE_BLUE,
-            Green => Color::hex("c6fed6").unwrap(), //Color::GREEN,
-            Red => Color::hex("fec6d2").unwrap(), //Color::RED,
-            Blue => Color::hex("c6d2fe").unwrap(), //Color::BLUE,
-            Pink => Color::hex("fec6ee").unwrap(), //Color::PINK,
-            Yellow => Color::hex("eefec6").unwrap(), //Color::YELLOW,
-            Silver => Color::hex("dae5ea").unwrap(), //Color::SILVER,
+            Orange => Color::hex("fef2c6").unwrap(), /* Color::ORANGE, */
+            LightBlue => Color::hex("c6eefe").unwrap(), /* Color::ALICE_BLUE, */
+            Green => Color::hex("c6fed6").unwrap(), /* Color::GREEN, */
+            Red => Color::hex("fec6d2").unwrap(), /* Color::RED, */
+            Blue => Color::hex("c6d2fe").unwrap(), /* Color::BLUE, */
+            Pink => Color::hex("fec6ee").unwrap(), /* Color::PINK, */
+            Yellow => Color::hex("eefec6").unwrap(), /* Color::YELLOW, */
+            Silver => Color::hex("dae5ea").unwrap(), /* Color::SILVER, */
             Gold => Color::GOLD,
         }
     }

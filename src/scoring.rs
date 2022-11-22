@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use bevy::prelude::{App, Plugin, Res, ResMut};
+use bevy::prelude::{App, Plugin, Res, ResMut, Resource};
 use iyes_loopless::prelude::AppLooplessStateExt;
 
 use crate::GameState;
@@ -23,18 +23,22 @@ impl Plugin for ScorePlugin {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(
+    Debug, Default, Clone, PartialEq, Eq, Resource,
+)]
 pub struct Score {
     pub score: u32,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(
+    Debug, Default, Clone, PartialEq, Eq, Resource,
+)]
 pub struct HighScore {
     pub score: u32,
     pub time: Duration,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Resource)]
 pub struct Timer {
     pub start: Option<Instant>,
     pub runtime: Option<Duration>,
