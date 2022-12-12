@@ -93,7 +93,7 @@ pub fn block_breaker_menu_button_render(
                 }}
                 styles={KStyle {
                     background_color: StyleProp::Value(Color::BLACK),
-                    height: StyleProp::Value(Units::Pixels(50.0)),
+                    height: StyleProp::Value(Units::Pixels(60.0)),
                     width: StyleProp::Value(Units::Pixels(200.0)),
                     left: StyleProp::Value(Units::Stretch(1.0)),
                     right: StyleProp::Value(Units::Stretch(1.0)),
@@ -106,12 +106,13 @@ pub fn block_breaker_menu_button_render(
                     text={TextProps {
                         alignment: Alignment::Middle,
                         content: button_text,
+                        line_height: Some(100.1),
                         size: 28.0,
                         ..Default::default()
                     }}
                 />
             </NinePatchBundle>
-        }
+        };
     }
     true
 }

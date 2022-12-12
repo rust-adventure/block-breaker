@@ -35,12 +35,13 @@ fn game_ui(
     mut font_mapping: ResMut<FontMapping>,
     asset_server: Res<AssetServer>,
 ) {
-    commands.spawn(UICameraBundle::new());
-    font_mapping.set_default(
-        asset_server.load("roboto.kayak_font"),
-    );
-
     let mut widget_context = KayakRootContext::new();
+    widget_context.add_plugin(KayakWidgetsContextPlugin);
+
+    font_mapping.set_default(
+        // asset_server.load("roboto.kayak_font"),
+        asset_server.load("fonts/AlfaSlabOne-Regular.kttf"),
+    );
 
     let parent_id = None;
 
@@ -76,9 +77,9 @@ fn game_ui(
         <KayakAppBundle>
             <GameMenuBundle/>
         </KayakAppBundle>
-    }
+    };
 
-    commands.insert_resource(widget_context);
+    commands.spawn(UICameraBundle::new(widget_context));
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Component)]
@@ -349,6 +350,6 @@ pub fn game_menu_render(
       </ElementBundle>
       <ElementBundle styles={right_styles}></ElementBundle>
     </ElementBundle>
-        }
+        };
     true
 }
