@@ -10,26 +10,26 @@ use block_breaker::{
 
 use bevy::{
     prelude::*,
-    render::settings::{WgpuFeatures, WgpuSettings},
+    render::{
+        settings::{WgpuFeatures, WgpuSettings},
+        RenderPlugin,
+    },
     sprite::Anchor,
 };
 use bevy_hanabi::prelude::*;
 use bevy_prototype_lyon::prelude::*;
 use bevy_rapier2d::prelude::*;
-use iyes_loopless::prelude::*;
 
 fn main() {
-    let mut options = WgpuSettings::default();
-    options.features.set(
+    let mut wgpu_settings = WgpuSettings::default();
+    wgpu_settings.features.set(
         WgpuFeatures::VERTEX_WRITABLE_STORAGE,
         true,
     );
 
     App::new()
-        .insert_resource(Msaa { samples: 4 })
         .insert_resource(Board::new(11, 28))
-        .insert_resource(options)
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(RenderPlugin { wgpu_settings }),)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(UiPlugin)
@@ -39,26 +39,22 @@ fn main() {
         .insert_resource(ClearColor(Color::rgb(
             0.5, 0.5, 0.5,
         )))
-        .add_loopless_state(STARTING_GAME_STATE)
+        .add_state::<GameState>()
         .add_plugin(ScorePlugin)
         .add_event::<SpawnThreeBallsEvent>()
         .add_startup_system(setup)
-        .add_system_set(
-            ConditionSet::new()
-                .run_in_state(GameState::Playing)
-                .with_system(despawn_area_collisions)
-                .with_system(ball_collisions)
-                .with_system(movement)
-                .with_system(track_damage)
-                .with_system(block_removal)
-                .with_system(powerup_gravity)
-                .with_system(powerup_collisions)
-                .with_system(three_balls_events)
-                .into(),
-        )
-        .add_enter_system(
-            GameState::Playing,
-            spawn_new_game,
+        .add_systems((
+            despawn_area_collisions,
+            ball_collisions,
+            movement,
+            track_damage,
+            block_removal,
+            powerup_gravity,
+            powerup_collisions,
+            three_balls_events,
+        ).in_set(OnUpdate(GameState::Playing)))
+        .add_system(
+            spawn_new_game.in_schedule(OnEnter(GameState::Playing))
         )
         .run();
 }
@@ -119,25 +115,23 @@ fn spawn_new_game(
     //     transform: todo!(),
     // });
     commands
-        .spawn(GeometryBuilder::build_as(
-            &shape,
-            DrawMode::Outlined {
-                fill_mode: bevy_prototype_lyon::prelude::FillMode::color(Color::WHITE),
-                outline_mode: StrokeMode::new(
-                    Color::BLACK,
-                    1.0,
+        .spawn((
+            ShapeBundle {
+                path: GeometryBuilder::build_as(&shape),
+                transform: Transform::from_xyz(
+                    board.physical.x / 2.0,
+                    board.physical.y / 2.0
+                        + board.u8_cell_to_physical(
+                            3,
+                            board::Axis::Y,
+                        )
+                        + 100.0,
+                    5.0,
                 ),
+                ..default()
             },
-            Transform::from_xyz(
-                board.physical.x / 2.0,
-                board.physical.y / 2.0
-                    + board.u8_cell_to_physical(
-                        3,
-                        board::Axis::Y,
-                    )
-                    + 100.0,
-                5.0,
-            ),
+            Fill::color(Color::WHITE),
+            Stroke::new(Color::BLACK, 1.0),
         ))
         // material mesh bundle is only applicable in bevy
         // 0.8.0 .spawn_bundle(MaterialMesh2dBundle
@@ -168,7 +162,7 @@ fn spawn_new_game(
         })
         .insert(Collider::ball(10.0))
         .insert(Velocity::linear(Vec2::new(
-            100.0, 400.0
+            100.0, 400.0,
         )))
         .insert(Ball)
         .insert(GravityScale(0.0))
@@ -235,21 +229,20 @@ fn spawn_new_game(
         ..Default::default()
     };
 
-    commands.spawn(GeometryBuilder::build_as(
-        &shape,
-        DrawMode::Outlined {
-            fill_mode: bevy_prototype_lyon::prelude::FillMode::color(Color::rgba(
-                0.0, 0.0, 0.0, 0.0,
-            )),
-            outline_mode: StrokeMode::new(
-                Color::rgba(82.0, 90.0, 94.0, 1.0),
-                10.0,
+    commands.spawn((
+        ShapeBundle {
+            path: GeometryBuilder::build_as(&shape),
+            transform: Transform::from_xyz(
+                board.physical.x / 2.0,
+                board.physical.y / 2.0,
+                2.0,
             ),
+            ..default()
         },
-        Transform::from_xyz(
-            board.physical.x / 2.0,
-            board.physical.y / 2.0,
-            2.0,
+        Fill::color(Color::rgba(0.0, 0.0, 0.0, 0.0)),
+        Stroke::new(
+            Color::rgba(82.0, 90.0, 94.0, 1.0),
+            10.0,
         ),
     ));
 
@@ -325,12 +318,17 @@ fn spawn_new_game(
             spawner,
             ..Default::default()
         }
-        .init(PositionCircleModifier {
-            axis: Vec3::Z,
+        .init(InitPositionSphereModifier {
+            center: Vec3::ZERO,
             radius: BALL_RADIUS,
-            speed: 10.2.into(),
             dimension: ShapeDimension::Surface,
-            ..Default::default()
+        })
+        .init(InitVelocitySphereModifier {
+            center: Vec3::ZERO,
+            speed: 10.2.into(),
+        })
+        .init(InitLifetimeModifier {
+            lifetime: 5_f32.into(),
         })
         .render(SizeOverLifetimeModifier {
             gradient: Gradient::constant(Vec2::splat(
@@ -378,7 +376,6 @@ fn despawn_area_collisions(
     }
 }
 fn ball_collisions(
-    mut commands: Commands,
     mut events: EventReader<CollisionEvent>,
     mut balls: Query<
         (&mut Velocity, &Transform),

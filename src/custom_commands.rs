@@ -24,18 +24,14 @@ impl Command for SpawnBall {
         };
 
         let ball_id = world
-            .spawn(GeometryBuilder::build_as(
-                &shape,
-                DrawMode::Outlined {
-                    fill_mode: bevy_prototype_lyon::prelude::FillMode::color(
-                        Color::WHITE,
-                    ),
-                    outline_mode: StrokeMode::new(
-                        Color::BLACK,
-                        1.0,
-                    ),
+            .spawn((
+                ShapeBundle {
+                    path: GeometryBuilder::build_as(&shape),
+                    transform: self.transform,
+                    ..default()
                 },
-                self.transform,
+                Fill::color(Color::WHITE),
+                Stroke::new(Color::BLACK, 1.0),
             ))
             // material mesh bundle is only applicable in
             // bevy
@@ -71,7 +67,8 @@ impl Command for SpawnBall {
             .insert(Ball)
             .insert(LockedAxes::ROTATION_LOCKED)
             .insert(ActiveEvents::COLLISION_EVENTS)
-            .insert(GravityScale(0.0)).id();
+            .insert(GravityScale(0.0))
+            .id();
         dbg!(ball_id);
     }
 }

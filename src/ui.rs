@@ -1,5 +1,4 @@
 use bevy::{app::AppExit, prelude::*};
-use iyes_loopless::state::{CurrentState, NextState};
 
 use crate::GameState;
 
@@ -7,10 +6,11 @@ pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_startup_system(game_ui)
-            .add_system(button_new_game_system)
-            .add_system(button_exit_system)
-            .add_system(on_game_state_change);
+        app.add_startup_system(game_ui).add_systems((
+            button_new_game_system,
+            button_exit_system,
+            on_game_state_change,
+        ));
     }
 }
 
@@ -44,6 +44,7 @@ fn game_ui(
                 align_items: AlignItems::FlexEnd,
                 justify_content: JustifyContent::FlexStart,
                 padding: UiRect::all(Val::Px(10.0)),
+                gap: Size::all(Val::Px(10.0)),
                 ..default()
             },
             ..default()
@@ -124,7 +125,7 @@ fn button_new_game_system(
         ),
     >,
     mut text_query: Query<&mut Text>,
-    mut commands: Commands,
+    mut next_state: ResMut<NextState<GameState>>,
 ) {
     for (interaction, mut color, children) in
         &mut interaction_query
@@ -136,9 +137,8 @@ fn button_new_game_system(
                 text.sections[0].value =
                     "Starting".to_string();
                 *color = PRESSED_GOOD_BUTTON.into();
-                commands.insert_resource(NextState(
-                    GameState::Playing,
-                ));
+
+                next_state.set(GameState::Playing);
             }
             Interaction::Hovered => {
                 text.sections[0].value =
@@ -190,20 +190,20 @@ fn button_exit_system(
 }
 
 fn on_game_state_change(
-    game_state: Res<CurrentState<GameState>>,
+    game_state: Res<State<GameState>>,
     mut game_menu: Query<&mut Visibility, With<Menu>>,
 ) {
     if game_state.is_changed() {
         for mut game_menu in game_menu.iter_mut() {
             match game_state.0 {
                 GameState::Menu => {
-                    *game_menu = Visibility::VISIBLE
+                    *game_menu = Visibility::Visible
                 }
                 GameState::Playing => {
-                    *game_menu = Visibility::INVISIBLE
+                    *game_menu = Visibility::Hidden
                 }
                 GameState::Paused => {
-                    *game_menu = Visibility::VISIBLE
+                    *game_menu = Visibility::Visible
                 }
             }
         }

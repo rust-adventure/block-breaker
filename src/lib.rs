@@ -12,8 +12,11 @@ use bevy::prelude::*;
 
 pub const STARTING_GAME_STATE: GameState = GameState::Menu;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(
+    Default, Debug, Clone, Copy, PartialEq, Eq, Hash, States,
+)]
 pub enum GameState {
+    #[default]
     Menu,
     Playing,
     Paused,

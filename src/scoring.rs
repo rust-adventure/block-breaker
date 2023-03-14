@@ -1,7 +1,9 @@
 use std::time::{Duration, Instant};
 
-use bevy::prelude::{App, Plugin, Res, ResMut, Resource};
-use iyes_loopless::prelude::AppLooplessStateExt;
+use bevy::prelude::{
+    App, IntoSystemAppConfig, OnEnter, OnExit, Plugin, Res,
+    ResMut, Resource,
+};
 
 use crate::GameState;
 
@@ -12,13 +14,15 @@ impl Plugin for ScorePlugin {
         app.init_resource::<Timer>()
             .init_resource::<Score>()
             .init_resource::<HighScore>()
-            .add_enter_system(
-                GameState::Playing,
-                start_timer,
+            .add_system(
+                start_timer.in_schedule(OnEnter(
+                    GameState::Playing,
+                )),
             )
-            .add_exit_system(
-                GameState::Playing,
-                close_timer,
+            .add_system(
+                close_timer.in_schedule(OnExit(
+                    GameState::Playing,
+                )),
             );
     }
 }
