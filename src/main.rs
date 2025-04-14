@@ -284,11 +284,11 @@ fn ball_collision(
     mut next_state: ResMut<NextState<AppState>>,
 ) {
     for ball in &balls {
-        for e in ball.iter() {
-            if let Ok(_) = bricks.get(*e) {
-                commands.entity(*e).despawn();
+        for entity in ball.iter() {
+            if let Ok(_) = bricks.get(*entity) {
+                commands.entity(*entity).despawn();
             }
-            if let Ok(_) = respawn_areas.get(*e) {
+            if let Ok(_) = respawn_areas.get(*entity) {
                 next_state.set(AppState::GameOver);
             }
         }
