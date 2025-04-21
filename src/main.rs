@@ -32,10 +32,7 @@ fn main() -> AppExit {
                 .run_if(in_state(AppState::GameOver))
                 .run_if(input_just_pressed(KeyCode::KeyR)),
         )
-        .add_systems(
-            FixedUpdate,
-            (paddle_controls, ball_collision),
-        )
+        .add_systems(FixedUpdate, paddle_controls)
         .run()
 }
 
@@ -89,38 +86,34 @@ fn setup(
     ));
 
     commands.spawn((
-        Transform::default(),
-        children![
-            (
-                RigidBody::Static,
-                Collider::half_space(Vec2::X),
-                Transform::from_xyz(-300., 0., 0.),
-            ),
-            (
-                RigidBody::Static,
-                Collider::half_space(Vec2::NEG_X),
-                Transform::from_xyz(300., 0., 0.),
-            ),
-            (
-                RigidBody::Static,
-                Collider::half_space(Vec2::Y),
-                Transform::from_xyz(
-                    0.,
-                    -(CANVAS_SIZE.y / 2. - 20.),
-                    0.
-                ),
-            ),
-            (
-                RigidBody::Static,
-                Collider::half_space(Vec2::NEG_Y),
-                Transform::from_xyz(
-                    0.,
-                    CANVAS_SIZE.y / 2. - 20.,
-                    0.
-                ),
-            )
-        ],
+        RigidBody::Static,
+        Collider::half_space(Vec2::X),
+        Transform::from_xyz(-300., 0., 0.),
     ));
+    commands.spawn((
+        RigidBody::Static,
+        Collider::half_space(Vec2::NEG_X),
+        Transform::from_xyz(300., 0., 0.),
+    ));
+    commands.spawn((
+        RigidBody::Static,
+        Collider::half_space(Vec2::Y),
+        Transform::from_xyz(
+            0.,
+            -(CANVAS_SIZE.y / 2. - 20.),
+            0.,
+        ),
+    ));
+    commands.spawn((
+        RigidBody::Static,
+        Collider::half_space(Vec2::NEG_Y),
+        Transform::from_xyz(
+            0.,
+            CANVAS_SIZE.y / 2. - 20.,
+            0.,
+        ),
+    ));
+
     commands.spawn((
         Sprite {
             custom_size: Some(Vec2::new(
@@ -175,27 +168,52 @@ fn new_game(
         Paddle,
         StateScoped(AppState::Playing),
         RigidBody::Kinematic,
-        Collider::rectangle(200., 20.),
+        Collider::ellipse(100., 10.),
     ));
-    commands.spawn((
-        Mesh2d(meshes.add(Circle::new(10.))),
-        MeshMaterial2d(
-            materials.add(Color::from(SLATE_950)),
-        ),
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        StateScoped(AppState::Playing),
-        Ball,
-        children![(
-            Mesh2d(meshes.add(Circle::new(9.))),
-            MeshMaterial2d(materials.add(Color::WHITE)),
-        )],
-        RigidBody::Dynamic,
-        Collider::circle(10.),
-        GravityScale(0.),
-        LinearVelocity(Vec2 { x: 50., y: -200. }),
-        LockedAxes::ROTATION_LOCKED,
-        CollidingEntities::default(),
-    ));
+    commands
+        .spawn((
+            Mesh2d(meshes.add(Circle::new(10.))),
+            MeshMaterial2d(
+                materials.add(Color::from(SLATE_950)),
+            ),
+            Transform::from_xyz(0.0, 0.0, 0.0),
+            StateScoped(AppState::Playing),
+            Ball,
+            children![(
+                Mesh2d(meshes.add(Circle::new(9.))),
+                MeshMaterial2d(materials.add(Color::WHITE)),
+            )],
+            RigidBody::Dynamic,
+            Collider::circle(10.),
+            GravityScale(0.),
+            LinearVelocity(Vec2 { x: 50., y: -200. }),
+            LockedAxes::ROTATION_LOCKED,
+            CollisionEventsEnabled,
+        ))
+        .observe(
+            |trigger: Trigger<OnCollisionStart>,
+             mut commands: Commands,
+             bricks: Query<(), With<Brick>>,
+             respawn_areas: Query<
+                (),
+                With<RespawnBallArea>,
+            >,
+             mut next_state: ResMut<
+                NextState<AppState>,
+            >| {
+                if let Ok(_) = bricks.get(trigger.event().0)
+                {
+                    commands
+                        .entity(trigger.event().0)
+                        .despawn();
+                }
+                if let Ok(_) =
+                    respawn_areas.get(trigger.event().0)
+                {
+                    next_state.set(AppState::GameOver);
+                }
+            },
+        );
 
     let brick_size = Vec2::new(80., 40.);
     let num_bricks_per_row = 6;
@@ -207,9 +225,9 @@ fn new_game(
                     brick_size.x,
                     brick_size.y,
                 ))),
-                MeshMaterial2d(
-                    materials.add(Color::from(SLATE_950)),
-                ),
+                MeshMaterial2d(materials.add(
+                    Color::from(SLATE_950).with_alpha(0.2),
+                )),
                 Transform::from_xyz(
                     brick_size.x * i as f32
                         - brick_size.x
@@ -233,8 +251,7 @@ fn new_game(
                         brick_size.y - 2.,
                     ))),
                     MeshMaterial2d(
-                        materials
-                            .add(Color::from(BLUE_400)),
+                        materials.add(Color::from(SKY_400)),
                     ),
                 )],
             ));
@@ -274,23 +291,4 @@ fn restart_game(
     mut next_state: ResMut<NextState<AppState>>,
 ) {
     next_state.set(AppState::Playing);
-}
-
-fn ball_collision(
-    mut commands: Commands,
-    balls: Query<&CollidingEntities, With<Ball>>,
-    bricks: Query<(), With<Brick>>,
-    respawn_areas: Query<(), With<RespawnBallArea>>,
-    mut next_state: ResMut<NextState<AppState>>,
-) {
-    for ball in &balls {
-        for entity in ball.iter() {
-            if let Ok(_) = bricks.get(*entity) {
-                commands.entity(*entity).despawn();
-            }
-            if let Ok(_) = respawn_areas.get(*entity) {
-                next_state.set(AppState::GameOver);
-            }
-        }
-    }
 }
