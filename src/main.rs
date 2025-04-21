@@ -29,8 +29,9 @@ fn main() -> AppExit {
         .add_systems(
             Update,
             restart_game
-                .run_if(in_state(AppState::GameOver))
-                .run_if(input_just_pressed(KeyCode::KeyR)),
+                .run_if(in_state(AppState::GameOver).and(
+                    input_just_pressed(KeyCode::KeyR),
+                )),
         )
         .add_systems(FixedUpdate, paddle_controls)
         .run()
