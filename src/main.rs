@@ -9,13 +9,17 @@ const CANVAS_SIZE: Vec2 = Vec2::new(600., 1080.);
 
 fn main() -> AppExit {
     App::new()
+        .insert_resource(ClearColor(Color::from(SLATE_950)))
         .insert_resource(DefaultFriction(Friction::new(0.)))
         .insert_resource(DefaultRestitution(
             Restitution::new(1.),
         ))
         .add_plugins((
             DefaultPlugins,
-            PhysicsPlugins::default(),
+            PhysicsPlugins::default().set(
+                PhysicsInterpolationPlugin::interpolate_all(
+                ),
+            ),
             // PhysicsDebugPlugin::default(),
         ))
         .init_state::<AppState>()
@@ -58,23 +62,7 @@ struct Brick;
 #[derive(Component)]
 struct RespawnBallArea;
 
-fn setup(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-) {
-    commands.spawn((
-        Sprite {
-            custom_size: Some(Vec2::new(
-                1920.0 * 2.0,
-                1080.0 * 2.0,
-            )),
-            image: asset_server
-                .load("uncolored_desert.png"),
-            ..default()
-        },
-        Transform::from_xyz(0., 0., -1.0),
-    ));
-
+fn setup(mut commands: Commands) {
     commands.spawn((
         Camera2d,
         Projection::Orthographic(OrthographicProjection {
@@ -121,7 +109,7 @@ fn setup(
                 CANVAS_SIZE.x,
                 CANVAS_SIZE.y - 40.,
             )),
-            color: Color::WHITE.with_alpha(0.2),
+            color: Color::from(SKY_800),
             ..default()
         },
         Transform::from_xyz(0., 0., -1.0),
@@ -173,23 +161,23 @@ fn new_game(
     ));
     commands
         .spawn((
+            Ball,
             Mesh2d(meshes.add(Circle::new(10.))),
             MeshMaterial2d(
                 materials.add(Color::from(SLATE_950)),
             ),
             Transform::from_xyz(0.0, 0.0, 0.0),
             StateScoped(AppState::Playing),
-            Ball,
+            RigidBody::Dynamic,
+            Collider::circle(10.),
+            GravityScale(0.),
+            LinearVelocity(Vec2 { x: 100., y: -400. }),
+            LockedAxes::ROTATION_LOCKED,
+            CollisionEventsEnabled,
             children![(
                 Mesh2d(meshes.add(Circle::new(9.))),
                 MeshMaterial2d(materials.add(Color::WHITE)),
             )],
-            RigidBody::Dynamic,
-            Collider::circle(10.),
-            GravityScale(0.),
-            LinearVelocity(Vec2 { x: 50., y: -200. }),
-            LockedAxes::ROTATION_LOCKED,
-            CollisionEventsEnabled,
         ))
         .observe(
             |trigger: Trigger<OnCollisionStart>,
@@ -202,14 +190,12 @@ fn new_game(
              mut next_state: ResMut<
                 NextState<AppState>,
             >| {
-                if let Ok(_) = bricks.get(trigger.event().0)
-                {
+                if bricks.contains(trigger.event().0) {
                     commands
                         .entity(trigger.event().0)
                         .despawn();
                 }
-                if let Ok(_) =
-                    respawn_areas.get(trigger.event().0)
+                if respawn_areas.contains(trigger.event().0)
                 {
                     next_state.set(AppState::GameOver);
                 }
@@ -279,11 +265,8 @@ fn paddle_controls(
 fn show_restart_button(mut commands: Commands) {
     commands.spawn((
         Text::new("Press R to Restart Game"),
-        TextFont {
-            font_size: 67.0,
-            ..default()
-        },
-        TextColor(SLATE_950.into()),
+        TextFont::from_font_size(67.0),
+        TextColor(SLATE_50.into()),
         StateScoped(AppState::GameOver),
     ));
 }
