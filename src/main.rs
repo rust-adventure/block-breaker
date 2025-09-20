@@ -2,7 +2,7 @@ use avian2d::{PhysicsPlugins, prelude::*};
 use bevy::{
     color::palettes::tailwind::*,
     input::common_conditions::input_just_pressed,
-    prelude::*, render::camera,
+    prelude::*,
 };
 
 const CANVAS_SIZE: Vec2 = Vec2::new(600., 1080.);
@@ -20,10 +20,9 @@ fn main() -> AppExit {
                 PhysicsInterpolationPlugin::interpolate_all(
                 ),
             ),
-            // PhysicsDebugPlugin::default(),
+            PhysicsDebugPlugin::default(),
         ))
         .init_state::<AppState>()
-        .enable_state_scoped_entities::<AppState>()
         .add_systems(Startup, setup)
         .add_systems(OnEnter(AppState::Playing), new_game)
         .add_systems(
@@ -67,7 +66,7 @@ fn setup(mut commands: Commands) {
         Camera2d,
         Projection::Orthographic(OrthographicProjection {
             scaling_mode:
-                camera::ScalingMode::FixedVertical {
+                bevy::camera::ScalingMode::FixedVertical {
                     viewport_height: 1080.,
                 },
             ..OrthographicProjection::default_2d()
@@ -155,10 +154,11 @@ fn new_game(
             0.0,
         ),
         Paddle,
-        StateScoped(AppState::Playing),
+        DespawnOnExit(AppState::Playing),
         RigidBody::Kinematic,
         Collider::ellipse(100., 10.),
     ));
+
     commands
         .spawn((
             Ball,
@@ -167,7 +167,7 @@ fn new_game(
                 materials.add(Color::from(SLATE_950)),
             ),
             Transform::from_xyz(0.0, 0.0, 0.0),
-            StateScoped(AppState::Playing),
+            DespawnOnExit(AppState::Playing),
             RigidBody::Dynamic,
             Collider::circle(10.),
             GravityScale(0.),
@@ -177,10 +177,11 @@ fn new_game(
             children![(
                 Mesh2d(meshes.add(Circle::new(9.))),
                 MeshMaterial2d(materials.add(Color::WHITE)),
+                Transform::from_xyz(0., 0., 1.)
             )],
         ))
         .observe(
-            |trigger: Trigger<OnCollisionStart>,
+            |trigger: On<CollisionStart>,
              mut commands: Commands,
              bricks: Query<(), With<Brick>>,
              respawn_areas: Query<
@@ -190,12 +191,12 @@ fn new_game(
              mut next_state: ResMut<
                 NextState<AppState>,
             >| {
-                if bricks.contains(trigger.event().0) {
+                if bricks.contains(trigger.collider2) {
                     commands
-                        .entity(trigger.event().0)
+                        .entity(trigger.collider2)
                         .despawn();
                 }
-                if respawn_areas.contains(trigger.event().0)
+                if respawn_areas.contains(trigger.collider2)
                 {
                     next_state.set(AppState::GameOver);
                 }
@@ -226,7 +227,7 @@ fn new_game(
                     0.0,
                 ),
                 Brick,
-                StateScoped(AppState::Playing),
+                DespawnOnExit(AppState::Playing),
                 RigidBody::Static,
                 Collider::rectangle(
                     brick_size.x,
@@ -267,7 +268,7 @@ fn show_restart_button(mut commands: Commands) {
         Text::new("Press R to Restart Game"),
         TextFont::from_font_size(67.0),
         TextColor(SLATE_50.into()),
-        StateScoped(AppState::GameOver),
+        DespawnOnExit(AppState::GameOver),
     ));
 }
 
