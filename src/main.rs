@@ -20,7 +20,7 @@ fn main() -> AppExit {
                 PhysicsInterpolationPlugin::interpolate_all(
                 ),
             ),
-            PhysicsDebugPlugin::default(),
+            // PhysicsDebugPlugin::default(),
         ))
         .init_state::<AppState>()
         .add_systems(Startup, setup)
@@ -127,7 +127,7 @@ fn setup(mut commands: Commands) {
             0.,
             -(CANVAS_SIZE.y / 2. - 10.)
                 + CANVAS_SIZE.y / 8. / 2.,
-            -1.0,
+            1.0,
         ),
         RespawnBallArea,
         Collider::rectangle(
