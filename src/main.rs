@@ -1,4 +1,4 @@
-use std::f64::consts::FRAC_PI_8;
+use std::f32::consts::{FRAC_PI_4, PI};
 
 use bevy::{
     camera::ScalingMode,
@@ -6,21 +6,22 @@ use bevy::{
     input::common_conditions::input_just_pressed,
     math::{
         FloatOrd,
-        bounding::{Aabb2d, BoundingCircle, RayCast2d},
+        bounding::{Aabb2d, RayCast2d},
     },
     prelude::*,
 };
 
-const CANVAS_SIZE: Vec2 = Vec2::new(600., 1080.);
 const BRICK_SIZE: Vec2 = Vec2::new(80., 40.);
+const CANVAS_SIZE: Vec2 =
+    Vec2::new(BRICK_SIZE.x * 14., 1080.);
 const BALL_SIZE: f32 = 10.;
+const DEFAULT_PADDLE_SIZE: Vec2 = Vec2::new(200.0, 20.0);
 
 fn main() -> AppExit {
     App::new()
         .insert_resource(ClearColor(Color::from(SLATE_950)))
         .add_plugins(DefaultPlugins)
         .init_state::<AppState>()
-        // .enable_state_scoped_entities::<AppState>()
         .add_systems(Startup, setup)
         .add_systems(OnEnter(AppState::Playing), new_game)
         .add_systems(
@@ -68,24 +69,28 @@ struct Wall(Plane2d);
 #[derive(Debug, Component)]
 struct Velocity(Vec2);
 
+#[derive(Debug, Component)]
+struct HalfSize(Vec2);
+
 fn setup(mut commands: Commands) {
     commands.spawn((
         Camera2d,
         Projection::Orthographic(OrthographicProjection {
-            // scaling_mode: ScalingMode::FixedVertical {
-            //     viewport_height: 1080.,
-            // },
+            scaling_mode: ScalingMode::AutoMin {
+                min_width: CANVAS_SIZE.x + BRICK_SIZE.x,
+                min_height: CANVAS_SIZE.y + BRICK_SIZE.y,
+            },
             ..OrthographicProjection::default_2d()
         }),
     ));
 
     commands.spawn((
         Wall(Plane2d::new(Vec2::X)),
-        Transform::from_xyz(-300., 0., 0.),
+        Transform::from_xyz(-CANVAS_SIZE.x / 2., 0., 0.),
     ));
     commands.spawn((
         Wall(Plane2d::new(Vec2::NEG_X)),
-        Transform::from_xyz(300., 0., 0.),
+        Transform::from_xyz(CANVAS_SIZE.x / 2., 0., 0.),
     ));
     commands.spawn((
         Wall(Plane2d::new(Vec2::Y)),
@@ -145,7 +150,10 @@ fn new_game(
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     commands.spawn((
-        Mesh2d(meshes.add(Rectangle::new(200.0, 20.0))),
+        Mesh2d(meshes.add(Rectangle::new(
+            DEFAULT_PADDLE_SIZE.x,
+            DEFAULT_PADDLE_SIZE.y,
+        ))),
         MeshMaterial2d(
             materials.add(Color::from(SLATE_950)),
         ),
@@ -157,11 +165,11 @@ fn new_game(
         Paddle,
         DespawnOnExit(AppState::Playing),
         // Collider for paddle
+        HalfSize(DEFAULT_PADDLE_SIZE / 2.),
     ));
 
     commands.spawn((
         Ball,
-        Visibility::Hidden,
         Velocity(Vec2::new(-200., -400.)),
         Mesh2d(meshes.add(Circle::new(BALL_SIZE))),
         MeshMaterial2d(
@@ -198,8 +206,8 @@ fn new_game(
     //     },
     // );
 
-    let num_bricks_per_row = 6;
-    let rows = 4;
+    let num_bricks_per_row = 13;
+    let rows = 6;
     let color = Oklcha::from(SKY_400);
     for row in 0..rows {
         for i in 0..num_bricks_per_row {
@@ -224,11 +232,12 @@ fn new_game(
                             * num_bricks_per_row as f32
                             / 2.
                         + BRICK_SIZE.x / 2.,
-                    CANVAS_SIZE.y * (3. / 8.)
+                    CANVAS_SIZE.y * (1. / 4.)
                         - BRICK_SIZE.y * row as f32,
                     0.0,
                 ),
                 Brick,
+                HalfSize(BRICK_SIZE / 2.),
                 DespawnOnExit(AppState::Playing),
                 // Collider::rectangle(
                 //     brick_size.x,
@@ -290,40 +299,39 @@ fn ball_movement(
         With<Ball>,
     >,
     walls: Query<(&Wall, &Transform), Without<Ball>>,
-    bricks: Query<&Transform, (Without<Ball>, With<Brick>)>,
-    paddles: Query<(&Paddle, &Transform), Without<Ball>>,
+    aabb_colliders: Query<
+        (Entity, &Transform, &HalfSize),
+        Without<Ball>,
+    >,
+    paddles: Query<(), With<Paddle>>,
     time: Res<Time>,
-    mut gizmos: Gizmos,
+    mut commands: Commands,
 ) {
     for (mut transform, mut velocity) in &mut balls {
-        gizmos.circle_2d(
-            transform.translation.xy(),
-            2.,
-            Color::WHITE,
-        );
-        // the Direction the ball is moving in
-        let ball_direction = Dir2::new(velocity.0).unwrap();
         // a ray that casts infinitely in the direction
         // the ball is moving
-        let new_ray = Ray2d::new(
+        let ball_ray = Ray2d::new(
+            // the location of the ball
             transform.translation.xy(),
-            ball_direction,
+            // the Direction the ball is moving in
+            Dir2::new(velocity.0).unwrap(),
         );
 
         // how far the ball is going to go this frame
         // represented as a vec2
         let ball_movement_this_frame =
             velocity.0 * time.delta_secs();
+        let ball_move_distance =
+            ball_movement_this_frame.length();
 
         // for each wall, check if we're going to hit it this frame
         for (wall, origin) in walls {
-            if let Some(hit_distance) = new_ray
+            if let Some(hit_distance) = ball_ray
                 .intersect_plane(
                     origin.translation.xy(),
                     wall.0,
                 )
-                && hit_distance
-                    <= ball_movement_this_frame.length()
+                && hit_distance <= ball_move_distance
             {
                 // todo: travel some length towards wall, then some away from the reflected hit
 
@@ -338,89 +346,111 @@ fn ball_movement(
         }
 
         let ball_cast = RayCast2d::from_ray(
-            new_ray,
-            ball_movement_this_frame.length(),
+            ball_ray,
+            ball_move_distance,
         );
 
-        // for each brick, check if we're going to hit it this frame
-        // This *could* be a check against *all* bricks, where we
-        // then take the minimum distance instead.
-        for (index, origin) in bricks.iter().enumerate() {
-            let brick_collider = Aabb2d::new(
-                origin.translation.xy(),
-                BRICK_SIZE / 2.,
-            );
+        // for each brick or paddle, check if we're going to hit it this frame.
+        // then take the closest hit and process it, if it exists.
+        if let Some((entity, origin, brick_collider, _)) =
+            aabb_colliders
+                .iter()
+                .filter_map(
+                    |(entity, origin, half_size)| {
+                        let brick_collider = Aabb2d::new(
+                            origin.translation.xy(),
+                            half_size.0,
+                        );
 
-            if let Some(hit_distance) = ball_cast
-                .aabb_intersection_at(&brick_collider)
-                && hit_distance
-                    <= ball_movement_this_frame.length()
-            {
-                // figure out which aabb side we hit using planes
-                let (hit_normal, _) = [
-                    (
-                        Plane2d::new(Vec2::NEG_Y),
-                        Vec2::new(
-                            origin.translation.x,
-                            brick_collider.min.y,
-                        ),
-                    ),
-                    (
-                        Plane2d::new(Vec2::Y),
-                        Vec2::new(
-                            origin.translation.x,
-                            brick_collider.max.y,
-                        ),
-                    ),
-                    (
-                        Plane2d::new(Vec2::NEG_X),
-                        Vec2::new(
-                            brick_collider.min.x,
-                            origin.translation.y,
-                        ),
-                    ),
-                    (
-                        Plane2d::new(Vec2::X),
-                        Vec2::new(
-                            brick_collider.max.x,
-                            origin.translation.y,
-                        ),
-                    ),
-                ]
-                .into_iter()
-                .filter_map(|(plane, location)| {
-                    new_ray
-                        .intersect_plane(location, plane)
-                        .map(|hit| (plane.normal, hit))
-                })
-                .min_by(
-                    |(_, distance_a), (_, distance_b)| {
-                        FloatOrd(*distance_a)
-                            .cmp(&FloatOrd(*distance_b))
+                        // no intersection means no hit distance
+                        let hit_distance = ball_cast
+                            .aabb_intersection_at(
+                                &brick_collider,
+                            )?;
+
+                        Some((
+                            entity,
+                            origin,
+                            brick_collider,
+                            hit_distance,
+                        ))
                     },
                 )
-                .unwrap();
+                .min_by_key(|(_, _, _, distance)| {
+                    FloatOrd(*distance)
+                })
+        {
+            // figure out which aabb side we hit using planes
+            // if we made it here, this should *always* return a result
+            // because we just checked to see if we hit the aabb2d.
+            let (hit_normal, _) = [
+                (
+                    Plane2d::new(Vec2::NEG_Y),
+                    Vec2::new(
+                        origin.translation.x,
+                        brick_collider.min.y,
+                    ),
+                ),
+                (
+                    Plane2d::new(Vec2::Y),
+                    Vec2::new(
+                        origin.translation.x,
+                        brick_collider.max.y,
+                    ),
+                ),
+                (
+                    Plane2d::new(Vec2::NEG_X),
+                    Vec2::new(
+                        brick_collider.min.x,
+                        origin.translation.y,
+                    ),
+                ),
+                (
+                    Plane2d::new(Vec2::X),
+                    Vec2::new(
+                        brick_collider.max.x,
+                        origin.translation.y,
+                    ),
+                ),
+            ]
+            .into_iter()
+            .filter_map(|(plane, location)| {
+                ball_ray
+                    .intersect_plane(location, plane)
+                    .map(|hit_distance| {
+                        (plane.normal, hit_distance)
+                    })
+            })
+            .min_by_key(|(_, distance)| FloatOrd(*distance))
+            .unwrap();
 
-                info!(
-                    ?index,
-                    ?hit_normal,
-                    ?velocity,
-                    "hit"
-                );
-                // todo: travel some length towards wall, then some away from the reflected hit
+            if paddles.get(entity).is_ok() {
+                // paddle collision is built off of the angle between the
+                // ball and the paddle.
+                let direction_vector =
+                    transform.translation.xy()
+                        - origin.translation.xy();
 
-                // travel to the "hit point" on the Aabb2d border
+                // most angles will be PI range, so we scale to 90deg
+                // to avoid players getting stuck with a *very horizontal*
+                // ball trajectory, which is just unfun to wait for
+                let angle =
+                    direction_vector.normalize().to_angle();
+                let linear_angle = angle.clamp(0., PI) / PI;
+                let softened_angle = FRAC_PI_4
+                    .lerp(PI - FRAC_PI_4, linear_angle);
+                velocity.0 =
+                    Vec2::from_angle(softened_angle)
+                        .normalize()
+                        * velocity.0.length()
+            } else {
+                commands.entity(entity).despawn();
                 velocity.0 =
                     velocity.0.reflect(*hit_normal);
-                // return because we only want to handle one brick collision.
-                // If we don't return (or take another approach here), then
-                // we can end up in a situation where the infinitely small
-                // ball is reflected back and forth between two bricks with
-                // opposite normals in the same frame, resulting in an
-                // "unmoving ball".
-                return;
             }
+            break;
         }
+
         // Since all hits cause a `return`, this logic should only
         // run if we *don't* hit anything.
         // If we didn't hit something, then move the ball forward
