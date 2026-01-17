@@ -6,20 +6,24 @@ use bevy::{
     input::common_conditions::input_just_pressed,
     math::{
         FloatOrd,
-        bounding::{Aabb2d, RayCast2d},
+        bounding::{
+            Aabb2d, BoundingCircle, IntersectsVolume,
+            RayCast2d,
+        },
     },
     prelude::*,
+    sprite::Anchor,
 };
 
 const BRICK_SIZE: Vec2 = Vec2::new(80., 40.);
-const CANVAS_SIZE: Vec2 =
-    Vec2::new(BRICK_SIZE.x * 14., 1080.);
+const CANVAS_SIZE: Vec2 = Vec2::new(1280., 720.);
 const BALL_SIZE: f32 = 10.;
 const DEFAULT_PADDLE_SIZE: Vec2 = Vec2::new(200.0, 20.0);
+const PADDLE_SPEED: f32 = 400.0;
 
 fn main() -> AppExit {
     App::new()
-        .insert_resource(ClearColor(Color::from(SLATE_950)))
+        .insert_resource(ClearColor(Color::from(SKY_950)))
         .add_plugins(DefaultPlugins)
         .init_state::<AppState>()
         .add_systems(Startup, setup)
@@ -37,7 +41,11 @@ fn main() -> AppExit {
         )
         .add_systems(
             FixedUpdate,
-            (paddle_controls, ball_movement),
+            (
+                paddle_controls,
+                ball_movement,
+                on_intersect_respawn_area,
+            ),
         )
         .run()
 }
@@ -94,53 +102,55 @@ fn setup(mut commands: Commands) {
     ));
     commands.spawn((
         Wall(Plane2d::new(Vec2::Y)),
-        Transform::from_xyz(
-            0.,
-            -(CANVAS_SIZE.y / 2. - 20.),
-            0.,
-        ),
+        Transform::from_xyz(0., -(CANVAS_SIZE.y / 2.), 0.),
     ));
     commands.spawn((
         Wall(Plane2d::new(Vec2::NEG_Y)),
-        Transform::from_xyz(
-            0.,
-            CANVAS_SIZE.y / 2. - 20.,
-            0.,
-        ),
+        Transform::from_xyz(0., CANVAS_SIZE.y / 2., 0.),
     ));
 
+    // stage area, with border
+    commands.spawn((
+        Sprite {
+            custom_size: Some(Vec2::new(
+                // 4px border
+                CANVAS_SIZE.x + 4.,
+                CANVAS_SIZE.y + 4.,
+            )),
+            color: Color::from(SKY_50),
+            ..default()
+        },
+        Transform::from_xyz(0., 0., -3.0),
+    ));
     commands.spawn((
         Sprite {
             custom_size: Some(Vec2::new(
                 CANVAS_SIZE.x,
-                CANVAS_SIZE.y - 40.,
+                CANVAS_SIZE.y,
             )),
             color: Color::from(SKY_800),
             ..default()
         },
-        Transform::from_xyz(0., 0., -1.0),
+        Transform::from_xyz(0., 0., -2.0),
     ));
 
     commands.spawn((
         Sprite {
             custom_size: Some(Vec2::new(
                 CANVAS_SIZE.x,
-                CANVAS_SIZE.y / 8. - 20.,
+                CANVAS_SIZE.y / 8.
+                    - DEFAULT_PADDLE_SIZE.y / 2.,
             )),
-            color: Color::from(SKY_400).with_alpha(0.4),
+            color: Color::from(SKY_500).with_alpha(0.4),
             ..default()
         },
+        Anchor::BOTTOM_CENTER,
         Transform::from_xyz(
             0.,
-            -(CANVAS_SIZE.y / 2. - 10.)
-                + CANVAS_SIZE.y / 8. / 2.,
+            -(CANVAS_SIZE.y / 2.),
             -1.0,
         ),
         RespawnBallArea,
-        // Collider::rectangle(
-        //     CANVAS_SIZE.x,
-        //     CANVAS_SIZE.y / 8. - 20.,
-        // ),
     ));
 }
 
@@ -150,13 +160,11 @@ fn new_game(
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     commands.spawn((
-        Mesh2d(meshes.add(Rectangle::new(
-            DEFAULT_PADDLE_SIZE.x,
-            DEFAULT_PADDLE_SIZE.y,
-        ))),
-        MeshMaterial2d(
-            materials.add(Color::from(SLATE_950)),
-        ),
+        Sprite {
+            custom_size: Some(DEFAULT_PADDLE_SIZE),
+            color: SKY_50.into(),
+            ..default()
+        },
         Transform::from_xyz(
             0.0,
             -(CANVAS_SIZE.y * (3. / 8.)),
@@ -164,7 +172,6 @@ fn new_game(
         ),
         Paddle,
         DespawnOnExit(AppState::Playing),
-        // Collider for paddle
         HalfSize(DEFAULT_PADDLE_SIZE / 2.),
     ));
 
@@ -177,72 +184,42 @@ fn new_game(
         ),
         Transform::from_xyz(0.0, 0.0, 0.0),
         DespawnOnExit(AppState::Playing),
-        // Collider::circle(10.),
         children![(
-            Mesh2d(meshes.add(Circle::new(9.))),
+            Mesh2d(meshes.add(Circle::new(BALL_SIZE - 1.))),
             MeshMaterial2d(materials.add(Color::WHITE)),
+            Transform::from_xyz(0., 0., 1.)
         )],
     ));
-    // .observe(
-    //     |trigger: On<OnCollisionStart>,
-    //      mut commands: Commands,
-    //      bricks: Query<(), With<Brick>>,
-    //      respawn_areas: Query<
-    //         (),
-    //         With<RespawnBallArea>,
-    //     >,
-    //      mut next_state: ResMut<
-    //         NextState<AppState>,
-    //     >| {
-    //         if bricks.contains(trigger.event().0) {
-    //             commands
-    //                 .entity(trigger.event().0)
-    //                 .despawn();
-    //         }
-    //         if respawn_areas.contains(trigger.event().0)
-    //         {
-    //             next_state.set(AppState::GameOver);
-    //         }
-    //     },
-    // );
 
     let num_bricks_per_row = 13;
     let rows = 6;
-    let color = Oklcha::from(SKY_400);
+    let base_color = Oklcha::from(SKY_400);
     for row in 0..rows {
         for i in 0..num_bricks_per_row {
-            let current_color = color.with_hue(
+            let current_color = base_color.with_hue(
                 ((row + i) % 8) as f32
                     * (num_bricks_per_row * rows) as f32,
             );
             commands.spawn((
-                Mesh2d(meshes.add(Rectangle::new(
-                    BRICK_SIZE.x,
-                    BRICK_SIZE.y,
-                ))),
-                MeshMaterial2d(
-                    materials.add(
-                        Color::from(current_color)
-                            .with_alpha(0.2),
-                    ),
-                ),
+                Brick,
+                Sprite {
+                    custom_size: Some(BRICK_SIZE),
+                    color: Color::from(current_color)
+                        .with_alpha(0.4),
+                    ..default()
+                },
                 Transform::from_xyz(
                     BRICK_SIZE.x * i as f32
                         - BRICK_SIZE.x
                             * num_bricks_per_row as f32
                             / 2.
                         + BRICK_SIZE.x / 2.,
-                    CANVAS_SIZE.y * (1. / 4.)
+                    CANVAS_SIZE.y * (3. / 8.)
                         - BRICK_SIZE.y * row as f32,
                     0.0,
                 ),
-                Brick,
                 HalfSize(BRICK_SIZE / 2.),
                 DespawnOnExit(AppState::Playing),
-                // Collider::rectangle(
-                //     brick_size.x,
-                //     brick_size.y,
-                // ),
                 children![(
                     Mesh2d(meshes.add(Rectangle::new(
                         BRICK_SIZE.x - 2.,
@@ -253,13 +230,13 @@ fn new_game(
                             current_color
                         )),
                     ),
+                    Transform::from_xyz(0., 0., 1.)
                 )],
             ));
         }
     }
 }
 
-const PADDLE_SPEED: f32 = 400.0;
 fn paddle_controls(
     input: Res<ButtonInput<KeyCode>>,
     mut paddles: Query<&mut Transform, With<Paddle>>,
@@ -280,10 +257,19 @@ fn paddle_controls(
 
 fn show_restart_button(mut commands: Commands) {
     commands.spawn((
-        Text::new("Press R to Restart Game"),
-        TextFont::from_font_size(67.0),
-        TextColor(SLATE_50.into()),
-        DespawnOnExit(AppState::GameOver),
+        Node {
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            width: percent(100.),
+            height: percent(100.),
+            ..default()
+        },
+        children![(
+            Text::new("Press R to Restart Game"),
+            TextFont::from_font_size(67.0),
+            TextColor(SLATE_50.into()),
+            DespawnOnExit(AppState::GameOver),
+        )],
     ));
 }
 
@@ -341,7 +327,7 @@ fn ball_movement(
                 velocity.0 = velocity
                     .0
                     .reflect(wall.0.normal.as_vec2());
-                return;
+                break;
             }
         }
 
@@ -457,5 +443,30 @@ fn ball_movement(
         // in its velocity direction
         transform.translation +=
             (ball_movement_this_frame).extend(0.);
+    }
+}
+
+fn on_intersect_respawn_area(
+    respawn_area: Single<
+        (&Transform, &Sprite),
+        With<RespawnBallArea>,
+    >,
+    balls: Query<&Transform, With<Ball>>,
+    mut next_state: ResMut<NextState<AppState>>,
+) {
+    for ball in &balls {
+        let ball_collider = BoundingCircle::new(
+            ball.translation.xy(),
+            BALL_SIZE,
+        );
+        // check respawn area collision
+        let respawn_collider = Aabb2d::new(
+            respawn_area.0.translation.xy(),
+            respawn_area.1.custom_size.unwrap()
+                / Vec2::splat(2.),
+        );
+        if ball_collider.intersects(&respawn_collider) {
+            next_state.set(AppState::GameOver);
+        }
     }
 }
