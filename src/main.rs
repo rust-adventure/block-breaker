@@ -124,10 +124,7 @@ fn setup(mut commands: Commands) {
     ));
     commands.spawn((
         Sprite {
-            custom_size: Some(Vec2::new(
-                CANVAS_SIZE.x,
-                CANVAS_SIZE.y,
-            )),
+            custom_size: Some(CANVAS_SIZE),
             color: Color::from(SKY_800),
             ..default()
         },
@@ -145,11 +142,7 @@ fn setup(mut commands: Commands) {
             ..default()
         },
         Anchor::BOTTOM_CENTER,
-        Transform::from_xyz(
-            0.,
-            -(CANVAS_SIZE.y / 2.),
-            -1.0,
-        ),
+        Transform::from_xyz(0., -CANVAS_SIZE.y / 2., -1.0),
         RespawnBallArea,
     ));
 }
@@ -167,7 +160,7 @@ fn new_game(
         },
         Transform::from_xyz(
             0.0,
-            -(CANVAS_SIZE.y * (3. / 8.)),
+            -CANVAS_SIZE.y * (3. / 8.),
             0.0,
         ),
         Paddle,
@@ -319,15 +312,13 @@ fn ball_movement(
                 )
                 && hit_distance <= ball_move_distance
             {
-                // todo: travel some length towards wall, then some away from the reflected hit
-
                 // velocity is just the reflection of the hit
                 // this is basically inverting the X or Y direction
                 // to move in the opposite direction
                 velocity.0 = velocity
                     .0
                     .reflect(wall.0.normal.as_vec2());
-                break;
+                return;
             }
         }
 
