@@ -43,6 +43,9 @@ struct Paddle;
 #[derive(Debug, Component)]
 struct HalfSize(Vec2);
 
+#[derive(Component)]
+struct Brick;
+
 fn startup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -127,6 +130,50 @@ fn startup(
         Paddle,
         HalfSize(DEFAULT_PADDLE_SIZE / 2.),
     ));
+
+    let num_bricks_per_row = 13;
+    let rows = 6;
+    let base_color = Oklcha::from(SKY_400);
+    for row in 0..rows {
+        for i in 0..num_bricks_per_row {
+            let current_color = base_color.with_hue(
+                ((row + i) % 8) as f32
+                    * (num_bricks_per_row * rows) as f32,
+            );
+            commands.spawn((
+                Brick,
+                Sprite {
+                    custom_size: Some(BRICK_SIZE),
+                    color: Color::from(current_color)
+                        .with_alpha(0.4),
+                    ..default()
+                },
+                Transform::from_xyz(
+                    BRICK_SIZE.x * i as f32
+                        - BRICK_SIZE.x
+                            * num_bricks_per_row as f32
+                            / 2.
+                        + BRICK_SIZE.x / 2.,
+                    CANVAS_SIZE.y * (3. / 8.)
+                        - BRICK_SIZE.y * row as f32,
+                    0.0,
+                ),
+                HalfSize(BRICK_SIZE / 2.),
+                children![(
+                    Mesh2d(meshes.add(Rectangle::new(
+                        BRICK_SIZE.x - 2.,
+                        BRICK_SIZE.y - 2.,
+                    ))),
+                    MeshMaterial2d(
+                        materials.add(Color::from(
+                            current_color
+                        )),
+                    ),
+                    Transform::from_xyz(0., 0., 1.)
+                )],
+            ));
+        }
+    }
 }
 
 fn ball_movement(
@@ -141,6 +188,7 @@ fn ball_movement(
     >,
     paddles: Query<(), With<Paddle>>,
     time: Res<Time>,
+    mut commands: Commands,
 ) {
     for (mut transform, mut velocity) in &mut balls {
         // a ray that casts infinitely in the direction
@@ -185,7 +233,7 @@ fn ball_movement(
 
         // for each brick or paddle, check if we're going to hit it this frame.
         // then take the closest hit and process it, if it exists.
-        if let Some((entity, origin, _aabb_collider, _)) =
+        if let Some((entity, origin, aabb_collider, _)) =
             aabb_colliders
                 .iter()
                 .filter_map(
@@ -227,6 +275,52 @@ fn ball_movement(
                         * velocity.0.length()
             } else {
                 // handle bricks!
+                let (hit_normal, _) = [
+                    (
+                        Plane2d::new(Vec2::NEG_Y),
+                        Vec2::new(
+                            origin.translation.x,
+                            aabb_collider.min.y,
+                        ),
+                    ),
+                    (
+                        Plane2d::new(Vec2::Y),
+                        Vec2::new(
+                            origin.translation.x,
+                            aabb_collider.max.y,
+                        ),
+                    ),
+                    (
+                        Plane2d::new(Vec2::NEG_X),
+                        Vec2::new(
+                            aabb_collider.min.x,
+                            origin.translation.y,
+                        ),
+                    ),
+                    (
+                        Plane2d::new(Vec2::X),
+                        Vec2::new(
+                            aabb_collider.max.x,
+                            origin.translation.y,
+                        ),
+                    ),
+                ]
+                .into_iter()
+                .filter_map(|(plane, location)| {
+                    ball_ray
+                        .intersect_plane(location, plane)
+                        .map(|hit_distance| {
+                            (plane.normal, hit_distance)
+                        })
+                })
+                .min_by_key(|(_, distance)| {
+                    FloatOrd(*distance)
+                })
+                .unwrap();
+
+                commands.entity(entity).despawn();
+                velocity.0 =
+                    velocity.0.reflect(*hit_normal);
             }
             break;
         }
