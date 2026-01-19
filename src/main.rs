@@ -1,18 +1,30 @@
+use std::f32::consts::{FRAC_PI_4, PI};
+
 use bevy::{
-    camera::ScalingMode, color::palettes::tailwind::*,
+    camera::ScalingMode,
+    color::palettes::tailwind::*,
+    math::{
+        FloatOrd,
+        bounding::{Aabb2d, RayCast2d},
+    },
     prelude::*,
 };
 
 const BALL_SIZE: f32 = 10.;
 const BRICK_SIZE: Vec2 = Vec2::new(80., 40.);
 const CANVAS_SIZE: Vec2 = Vec2::new(1280., 720.);
+const DEFAULT_PADDLE_SIZE: Vec2 = Vec2::new(200.0, 20.0);
+const PADDLE_SPEED: f32 = 400.0;
 
 fn main() -> AppExit {
     App::new()
         .insert_resource(ClearColor(Color::from(SKY_950)))
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, startup)
-        .add_systems(FixedUpdate, ball_movement)
+        .add_systems(
+            FixedUpdate,
+            (paddle_controls, ball_movement),
+        )
         .run()
 }
 
@@ -24,6 +36,12 @@ struct Velocity(Vec2);
 
 #[derive(Debug, Component)]
 struct Wall(Plane2d);
+
+#[derive(Component)]
+struct Paddle;
+
+#[derive(Debug, Component)]
+struct HalfSize(Vec2);
 
 fn startup(
     mut commands: Commands,
@@ -94,6 +112,21 @@ fn startup(
         },
         Transform::from_xyz(0., 0., -2.0),
     ));
+
+    commands.spawn((
+        Sprite {
+            custom_size: Some(DEFAULT_PADDLE_SIZE),
+            color: SKY_50.into(),
+            ..default()
+        },
+        Transform::from_xyz(
+            0.0,
+            -CANVAS_SIZE.y * (3. / 8.),
+            0.0,
+        ),
+        Paddle,
+        HalfSize(DEFAULT_PADDLE_SIZE / 2.),
+    ));
 }
 
 fn ball_movement(
@@ -102,6 +135,11 @@ fn ball_movement(
         With<Ball>,
     >,
     walls: Query<(&Wall, &Transform), Without<Ball>>,
+    aabb_colliders: Query<
+        (Entity, &Transform, &HalfSize),
+        Without<Ball>,
+    >,
+    paddles: Query<(), With<Paddle>>,
     time: Res<Time>,
 ) {
     for (mut transform, mut velocity) in &mut balls {
@@ -140,7 +178,76 @@ fn ball_movement(
             }
         }
 
+        let ball_cast = RayCast2d::from_ray(
+            ball_ray,
+            ball_move_distance,
+        );
+
+        // for each brick or paddle, check if we're going to hit it this frame.
+        // then take the closest hit and process it, if it exists.
+        if let Some((entity, origin, _aabb_collider, _)) =
+            aabb_colliders
+                .iter()
+                .filter_map(
+                    |(entity, origin, half_size)| {
+                        let aabb_collider = Aabb2d::new(
+                            origin.translation.xy(),
+                            half_size.0,
+                        );
+
+                        // no intersection means no hit distance
+                        let hit_distance = ball_cast
+                            .aabb_intersection_at(
+                                &aabb_collider,
+                            )?;
+
+                        Some((
+                            entity,
+                            origin,
+                            aabb_collider,
+                            hit_distance,
+                        ))
+                    },
+                )
+                .min_by_key(|(_, _, _, distance)| {
+                    FloatOrd(*distance)
+                })
+        {
+            if paddles.get(entity).is_ok() {
+                let direction_vector =
+                    transform.translation.xy()
+                        - origin.translation.xy();
+
+                let angle = direction_vector.to_angle();
+                let linear_angle = angle.clamp(0., PI) / PI;
+                let softened_angle = FRAC_PI_4
+                    .lerp(PI - FRAC_PI_4, linear_angle);
+                velocity.0 =
+                    Vec2::from_angle(softened_angle)
+                        * velocity.0.length()
+            } else {
+                // handle bricks!
+            }
+            break;
+        }
+
         transform.translation +=
             (ball_movement_this_frame).extend(0.);
+    }
+}
+
+fn paddle_controls(
+    input: Res<ButtonInput<KeyCode>>,
+    mut paddles: Query<&mut Transform, With<Paddle>>,
+    time: Res<Time>,
+) {
+    for mut transform in &mut paddles {
+        if input.pressed(KeyCode::KeyA) {
+            transform.translation.x -=
+                PADDLE_SPEED * time.delta_secs();
+        } else if input.pressed(KeyCode::KeyD) {
+            transform.translation.x +=
+                PADDLE_SPEED * time.delta_secs();
+        }
     }
 }
